@@ -4,7 +4,7 @@
 int main()
 {
   int index,index1, width, height,size;
-  int R,G,B,Y,U,V,R1,G1,B1,Y1,U1,V1,TU,TV;
+  long int R,G,B,Y,U,V,R1,G1,B1,Y1,U1,V1,TU,TV;
   width=640;
   height=480;
   unsigned char *pixels = (unsigned char*)malloc((width*height*3));
@@ -17,9 +17,7 @@ int main()
   } 
   size=fread(pixels,1,640*480*3, RGB); 
   unsigned char *yuvArray = (unsigned char*)malloc((640*480*(3/2)));
- /*1.Iterating 2 pixels at a time and calculating corresponding YUV values
-   2.Taking the average of U & V of both pixels respectively
-   3.Assigning in UYVY format*/
+ //1.Iterating 2 pixels at a time and calculating corfileSizeponding YUV values
  for(index=0, index1=0 ; index<640*480*3; index=index+6,index1=index1+4)
    {
       //printf("%d\n",index);
@@ -30,52 +28,45 @@ int main()
       G1 = pixels[index+4]; 
       B1 = pixels[index+5];  
       //formula for RGB to YUV conversion
-      Y = 0.299*R + 0.587*G + 0.114*B;
-      U = -0.1687*R - 0.3313*G - 0.5*B + 128;
-      V = 0.5*R - 0.4187*G - 0.813*B + 128;
- 
-      Y1 = 0.299*R1 + 0.587*G1 + 0.114*B1;
-      U1 = -0.1687*R1 - 0.3313*G1 - 0.5*B1 + 128;
-      V1 = 0.5*R1 - 0.4187*G1 - 0.813*B1 + 128;
- 
+      Y =  0.257 * R + 0.504 * G + 0.098 * B +  16;
+      U = -0.148 * R - 0.291 * G + 0.439 * B + 128;
+      V =  0.439 * R - 0.368 * G - 0.071 * B + 128;
+
+      Y1 =  0.257 * R1 + 0.504 * G1 + 0.098 * B1 +  16;
+      U1 = -0.148 * R1 - 0.291 * G1 + 0.439 * B1 + 128;
+      V1 =  0.439 * R1 - 0.368 * G1 - 0.071 * B1 + 128;
+   
+      //2.Taking the average of U & V of both pixels fileSizepectively
       TU = (U + U1)/2;
       TV = (V + V1)/2;
- 
+      //3.Assigning in UYVY format
       yuvArray[index1]=TU;    
       yuvArray[index1+1]=Y;  
       yuvArray[index1+2]=TV;  
-      yuvArray[index1+3]=Y1;   
-    } 
-     /*if((index%2) != 0)
-     { 
-      if(count==0)
-      {
-       yuvArray[index+1]=Y;
-       count++;
-      }
-      else
-      {
-       yuvArray[index+1]=Y1;
-       count--;
-      }
-     } 
-     else if(index==0 && index%4 == 0)
-     {
-      yuvArray[index]=U;
-     } 
-     else
-     {
-      yuvArray[index]=V;
-     }*/ 
+      yuvArray[index1+3]=Y1;  
+   }
   FILE *YUV;
-  YUV = fopen("yuv2.raw","wb"); 
+  YUV = fopen("yuv.raw","wb"); 
   if (YUV == NULL) 
   {   
    printf("Error! YUV file could not open\n"); 
    exit(-1); 
   } 
   //writing the values in the array in YUV file
-  fwrite(yuvArray,1,640*480*(3/2),YUV);  
-  fclose(YUV);
+  fwrite(yuvArray,1,640*480*(3/2),YUV);
   fclose(RGB);
+  fclose(YUV);
+  
+  if(pixels == NULL)
+  {
+   free(pixels);
+  }
+  
+  if(yuvArray ==NULL)
+  {
+  free(yuvArray);
+  }
+
+  return 0;
+  
 }

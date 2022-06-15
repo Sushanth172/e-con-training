@@ -38,7 +38,7 @@ typedef struct bitmap_Header {
 typedef struct dib_Header {
   uint32_t bmpSize;
   uint32_t bmpWidth;
-  uint32_t bmpHeight;
+  int      bmpHeight;
   uint16_t colorPlanes;
   uint16_t bitsPerPixels;
   uint32_t compression;
@@ -50,7 +50,7 @@ typedef struct dib_Header {
 } DIB_HEADER;
 
 //ASSIGNING THE DATA FOR BITMAP HEADER
-void getBmpHeader(BITMAP_HEADER *bitmapHeader, int filesize)
+void setBmpHeader(BITMAP_HEADER *bitmapHeader, int filesize)
 {
  bitmapHeader->fileSize  = filesize+OFFSET_VALUE;
  bitmapHeader->reserved1 = RESERVED_1;
@@ -59,7 +59,7 @@ void getBmpHeader(BITMAP_HEADER *bitmapHeader, int filesize)
 }
 
 //ASSIGNING THE DATA FOR DIB HEADER
-void getDibHeader(DIB_HEADER *dibHeader, int filesize)
+void setDibHeader(DIB_HEADER *dibHeader, int filesize)
 { 
  dibHeader->bmpSize       = BMP_SIZE;
  dibHeader->bmpWidth      = BMP_WIDTH;
@@ -75,6 +75,7 @@ void getDibHeader(DIB_HEADER *dibHeader, int filesize)
 }
 
 //PRINTING THE DATA OF BITMAP HEADER
+printf("----------FILE HEADER DATA----------\n");
 void printBmpHeader(BITMAP_HEADER bitmapHeader)
 {
    printf("\nFILE SIZE   : %lu\n",bitmapHeader.fileSize);
@@ -84,10 +85,11 @@ void printBmpHeader(BITMAP_HEADER bitmapHeader)
 }
 
 //PRINTING THE DATA OF DIB HEADER
+
 void printDibHeader(DIB_HEADER dibHeader) {
    printf("\nSIZE OF DIB HEADER          : %lu\n", dibHeader.bmpSize);
    printf("WIDTH                       : %lu\n", dibHeader.bmpWidth);
-   printf("HEIGHT                      : %lu\n", dibHeader.bmpHeight);
+   printf("HEIGHT                      : %d\n", dibHeader.bmpHeight);
    printf("COLOR PLANES                : %lu\n", dibHeader.colorPlanes);
    printf("BITS PER PIXELS             : %lu\n", dibHeader.bitsPerPixels);
    printf("COMPRESSION                 : %lu\n", dibHeader.compression);
@@ -97,11 +99,11 @@ void printDibHeader(DIB_HEADER dibHeader) {
    printf("NUMBER OF IMPORTANT COLORS  : %lu\n", dibHeader.noOfImpColors);
 }
 
-void function()
+void rgbToBmpConverter()
 {
  FILE *filePtr1 = NULL;
  int filesize;
- unsigned char *buffer = (unsigned int*)malloc(BUFFER_SIZE);
+ unsigned char *rgbBuffer = (unsigned char*)malloc(BUFFER_SIZE);
  //OPEN WITH READ BINARY MODE AND VALIDATING THE FILE
  filePtr1 = fopen("rgb.raw","rb");
  if(filePtr1 == NULL)
@@ -109,7 +111,7 @@ void function()
   printf("This %s file could not open....","rgb.raw");
  }
 
- //FINDING THE SIZE OF THE FILE USING FSEEK FUNCTION
+ //FINDING THE SIZE OF THE FILE USING ftell()
  fseek(filePtr1,0,SEEK_END);
  filesize = ftell(filePtr1);
 
@@ -117,15 +119,16 @@ void function()
  fseek(filePtr1,0,SEEK_SET);
 
  //VALIDATING FREAD FUNCTION
- int total= fread(buffer,filesize,1,filePtr1);
- printf("fread size: %d",total);
+ int total= fread(rgbBuffer,filesize,1,filePtr1);
+ printf("\nfread size: %d\n",total);
  BITMAP_HEADER bitmapHeader;
  DIB_HEADER dibHeader;
 
  //CALLING THE FUNCTIONS
- getBmpHeader(&bitmapHeader,filesize);
- getDibHeader(&dibHeader,filesize);
+ setBmpHeader(&bitmapHeader,filesize);
+ setDibHeader(&dibHeader,filesize);
  FILE *filePtr2 = NULL;
+
  //OPEN WITH APPEND MODE AND VALIDATING THE FILE
  filePtr2 = fopen("bmpFile.bmp","a");
  if(filePtr2 == NULL)
@@ -148,23 +151,23 @@ void function()
  fwrite(&dibHeader,sizeof(DIB_HEADER),1,filePtr2);
 
  //APPENDING THE CONTENT OF RAW FILE TO THE HEADER DATA
- fwrite(buffer,filesize,1,filePtr2);
+ fwrite(rgbBuffer,filesize,1,filePtr2);
 
  //CLOSING THE FILE
  fclose(filePtr1);
  fclose(filePtr2);
  
  //FREE THE MEMORY FOR BUFFER
- if(buffer == NULL)
+ if(rgbBuffer != NULL)
  {
-  free(buffer);
+  free(rgbBuffer);
  }
 }
 
 //DRIVER FUNCTION
 int main()
 {
- function();
+ rgbToBmpConverter();
  return 0;
 }
 

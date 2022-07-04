@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include "v4l2dev.h"
 #include <libudev.h>
+#include <stdlib.h>
 #include <libusb-1.0/libusb.h>
 #define MAX_CHAR 100
 #define PASS 1
 #define FAIL -1
+
 int main()
 {
   int count=0,indexFromUser,retVal=0;
@@ -15,6 +17,7 @@ int main()
   char pixelFormat[MAX_CHAR]; //REQUIRED DECLARATIONS FOR GET DEVICE FORMAT
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
   int formats=0;
+  unsigned char *buffer = (unsigned char*)malloc(640*480);
 
   //TO GET NUMBER OF DEVICES CONNECTED
   getDeviceCount(&count);
@@ -91,11 +94,18 @@ int main()
     {
       setFormat(formatIndexFromUser);
     }
+    //GETTING THE CURRENT FORMAT OF THE DEVICE AFTER THE FORMAT HAS BEEN SET BY getFormatType API
     getCurrentFormat(&frame_height,&frame_width,pixelFormat);
     printf("\n-------------------------------------DEVICE %d CURRENT FORMAT-------------------------------------------",indexFromUser);
     printf("\nHEIGHT       :%d\n",frame_height);
     printf("WIDTH        :%d\n",frame_width);
     printf("PIXEL FORMAT :%s\n",pixelFormat);
+    //VALIDATING GRAB FRAME
+    if(grabFrame(buffer)!=PASS)
+    {
+      printf("\nGRAB FRAME IS FAILED!!");
+      return FAIL;
+    }
   }
   else
   {
@@ -103,5 +113,5 @@ int main()
   }
   //CLOSING THE DEVICE
   closeDevice();
-  return 0;
+  return PASS;
 }

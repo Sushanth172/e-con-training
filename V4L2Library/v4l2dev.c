@@ -14,8 +14,20 @@
 #define PASS 1
 #define FAIL -1
 #define PIXEL_FORMAT 5
+#define BUFFER_COUNT 3
+
+struct buffer{
+  void   *start;
+  size_t  length;
+};
+
 int refIndex=0;
 int fd=-1;
+struct v4l2_buffer buf;
+struct v4l2_requestbuffers req;
+struct buffer *buffers=NULL;
+char *temp_buffer =NULL;
+struct v4l2_capability cam_cap;  //For getting capability of that device
 
 #define fun m##a##i##n
 int fun()
@@ -25,7 +37,6 @@ int fun()
 int checkForValidNode(const char *dev_path)
 {
   int cam_fd;
-  struct v4l2_capability cam_cap;                                 //For getting capability of that device
   if ((cam_fd = open(dev_path, O_RDWR|O_NONBLOCK, 0)) < 0)
   {
     printf("Can't open camera device ");
@@ -49,7 +60,6 @@ int checkForValidNode(const char *dev_path)
   // printf("\nTHIS IS VALID NODE\n");
   return PASS;
 }
-
 //ENUMERATION OF PIXEL FORMATS SUPPORTED BY THE DEVICE
 int getFormats(int *formats)
 {
@@ -67,7 +77,11 @@ int getFormats(int *formats)
   formatDescriptor.index = 0;
   int count=0;
   char pix_fmt[PIXEL_FORMAT];
-
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(GET FORMATS)\n");
+    return FAIL;
+  }
   /*
   ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
   ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
@@ -130,6 +144,11 @@ int getFormatType(int formatIndex, char *formatType, int *width, int *height, in
   formatDescriptor.index = 0;
   int count=0;
   char pix_fmt[PIXEL_FORMAT];
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(GET FORMATS TYPE)\n");
+    return FAIL;
+  }
 
   /*
   ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
@@ -184,7 +203,7 @@ int getFormatType(int formatIndex, char *formatType, int *width, int *height, in
         printf("\nFRAME SIZE IS NOT V4L2_FRMSIZE_TYPE_DISCRETE TYPE\n");
         return FAIL;
       }
-    //  formatDescriptor.index++;
+      //  formatDescriptor.index++;
 
     }//enumFormat
   }
@@ -194,7 +213,7 @@ int getFormatType(int formatIndex, char *formatType, int *width, int *height, in
 //SETTING THE FORMAT IN THE PARTICULAR INDEX WHICH GOT FROM THE USER
 int setFormat(int formatIndexFromUser)
 {
-//  printf("Inside setformat\n");
+  //  printf("Inside setformat\n");
   struct v4l2_fmtdesc formatDescriptor;
   struct v4l2_frmsizeenum frameSize;
   struct v4l2_frmivalenum frameIntervalValue;
@@ -237,7 +256,7 @@ int setFormat(int formatIndexFromUser)
         {
           if(frameIntervalValue.type == V4L2_FRMIVAL_TYPE_DISCRETE)
           {
-          //printf("frminterval index:%d",frameIntervalValue.index);
+            //printf("frminterval index:%d",frameIntervalValue.index);
             frameIntervalValue.index++;
             if(formatIndexFromUser == formatIndex)
             {
@@ -570,5 +589,215 @@ int getDeviceCount(int *numberOfDevices)
   *numberOfDevices = count;
   udev_enumerate_unref(enumerate);  // FREE ENUMERATE
   udev_unref(udev);                 // FREE UDEV
+  return PASS;
+}
+//CHECKING THE CAPABILITY OF THE DEVICE USING QUERYCAP
+int queryCap()
+{
+  struct v4l2_capability cap;
+  if(ioctl(fd,VIDIOC_QUERYCAP,&cap))                      //querrying capabilities
+  {
+    printf("\nQUERY CAP FAILED\n");
+    return FAIL;
+  }
+  if(!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))            //checking if the device supports video capture
+  {
+    printf("\nDOES NOT SUPPORT VIDEO CAPTURE");
+    return FAIL;
+  }
+  if(!(cap.capabilities & V4L2_CAP_STREAMING))                //checking if the device supports streaming
+  {
+    printf("\nDOES NOT SUPPORT STREAMING\n");
+    return FAIL;
+  }
+  return PASS;
+}
+//REQUEST FOR BUFFER
+int requestBuffer()
+{
+  req.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  req.count  = BUFFER_COUNT;
+  req.memory = V4L2_MEMORY_MMAP;
+
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(REQUEST QUERY)\n");
+    return FAIL;
+  }
+  if(ioctl(fd, VIDIOC_REQBUFS, &req)<0)                               //checking if request buffer is success or not
+  {
+    printf("BUFFER REQUEST FAILED!!");
+    return FAIL;
+  }
+
+  if (req.count < 2)                                                  //request count less than minimum value
+  {
+    printf("INSUFFICIENT BUFFER COUNT\n");
+    return FAIL;
+  }
+  buffers = (struct buffer*)calloc(req.count, sizeof (*buffers));     //allocating memory for requsted buffer count
+  if(!buffers)
+  {
+    printf("MEMORY NOT ALLOCATED!!\n");
+    return FAIL;
+  }
+  return PASS;
+}
+
+//QUERRYING THE BUFFER
+int querryBuffer()
+{
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(QUERY BUFFER)\n");
+    return FAIL;
+  }
+  for(int index=0;index<req.count;index++)
+  {
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    buf.index = index;
+
+    //CHECKING IF QUERY BUFFER IS SUCCESSFUL OR NOT
+    if(ioctl(fd, VIDIOC_QUERYBUF,&buf)<0)
+    {
+      printf("QUERY BUFFER FAILED!!\n");
+      return FAIL;
+    }
+
+    buffers[index].length = buf.length;
+    buffers[index].start=mmap(NULL,buf.length,PROT_READ|PROT_WRITE,MAP_SHARED,fd,buf.m.offset);
+
+    if(buffers[index].start == MAP_FAILED) //VALIDATING FOR MMAP FAILURE
+    {
+      printf("MAPPING FAILED!\n");
+      return FAIL;
+    }
+  }
+  return PASS;
+}
+
+//SWITCHING ON THE STREAM
+int streamOn()
+{
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(STREAM ON)\n");
+    return FAIL;
+  }
+  if(ioctl(fd,VIDIOC_STREAMON,&buf.type)<0)                       //streaming on the device
+  {
+    printf("STREAMING IS FAILED!!\n");
+    return FAIL;
+  }
+  return PASS;
+}
+
+//QUEUE BUFFER
+int queueBuffer()
+{
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(QUEUE BUFFER)\n");
+    return FAIL;
+  }
+  for(int index=0;index<req.count;index++)
+  {
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    buf.index = index;
+    if(ioctl(fd,VIDIOC_QBUF,&buf)<0)                           //checking if queue buffer is successful
+    {
+      printf("ENQUEING FAILED\n");
+      return FAIL;
+    }
+  }
+  return PASS;
+}
+//DEQUEUE BUFFER
+int dequeueBuffer()
+{
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(DEQUEUE BUFFER)\n");
+    return FAIL;
+  }
+  for(int dequeue=0;dequeue<req.count;dequeue++)
+  {
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    if(ioctl(fd, VIDIOC_DQBUF,&buf)<0)                         //checking if dequeue is successful
+    {
+      printf("DEQUEUE FAILED!\n");
+      return FAIL;
+    }
+    temp_buffer = (unsigned char *)realloc((unsigned char*)temp_buffer,buf.bytesused);
+    memcpy(temp_buffer,(unsigned char *)buffers[buf.index].start,buf.bytesused);
+    if(ioctl(fd, VIDIOC_QBUF,&buf)<0)                         //checking if dequeue is successful
+    {
+      printf("QUEUE FAILED inside dequeue buffer!\n");
+      return FAIL;
+    }
+  }
+return PASS;
+}
+
+//SWITCHING OFF THE STREAM
+int streamOff()
+{
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(STREAM OFF)\n");
+    return FAIL;
+  }
+  if(ioctl(fd, VIDIOC_STREAMOFF, &buf.type)<0)                    //streaming off the device
+  {
+    printf("STREAM OFF FAILED\n");
+    return FAIL;
+  }
+  return PASS;
+}
+
+//GRAB FRAME API
+int grabFrame(unsigned char *data)
+{
+  //printf("\nBUFFER OPERATIONS STARTED\n");
+  if(queryCap()!=PASS)
+  {
+    printf("\nQUERY CAPABILITY FAILED");
+    return FAIL;
+  }
+  if(requestBuffer()!=PASS)
+  {
+    printf("\nREQUEST BUFFER FAILED");
+    return FAIL;
+  }
+  if(querryBuffer()!=PASS)
+  {
+    printf("\nQUERRY BUFFER FAILED");
+    return FAIL;
+  }
+  if(queueBuffer()!=PASS)
+  {
+    printf("\nQUEUE BUFFER FAILED");
+    return FAIL;
+  }
+  if(streamOn()!=PASS)
+  {
+    printf("\nSTREAM ON FAILED");
+    return FAIL;
+  }
+  if(dequeueBuffer()!=PASS)
+  {
+    printf("\nDEQUEUE BUFFER FAILED");
+    return FAIL;
+  }
+  memcpy(data,temp_buffer,640*480);
+
+  if(streamOff()!=PASS)
+  {
+    printf("\nSTREAM OFF FAILED");
+    return FAIL;
+  }
   return PASS;
 }

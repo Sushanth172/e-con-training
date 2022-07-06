@@ -104,6 +104,7 @@ int main()
     printf("WIDTH        :%d\n",frame_width);
     printf("PIXEL FORMAT :%s\n",pixelFormat);
     buffer = (unsigned char*)malloc(frame_width*frame_height*2);
+
     //VALIDATING GRAB FRAME
     if(grabFrame(buffer,&bytesused)!=PASS)
     {
@@ -116,13 +117,14 @@ int main()
     {
      printf("\nERROR IN OPENING FILE\n");
     }
+
     //WRITING THE BUFFER INTO THE FILE FRAME.RAW
     fwrite_validation=fwrite(buffer,bytesused,1,fd);
 
     //FWRITE VALIDATION
     if(fwrite_validation != PASS)
     {
-     printf("ERROR IN WRITING THE FILE...");
+     printf("\nERROR IN WRITING THE FILE...\n");
      fclose(fd);
      return FAIL;
     }

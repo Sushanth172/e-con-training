@@ -416,6 +416,11 @@ int openDevice(int deviceIndex)
 //CLOSING THE DEVICE
 int closeDevice()
 {
+  if(streamOff()!=PASS)
+  {
+    printf("\nSTREAM OFF FAILED");
+    return FAIL;
+  }
   if(fd > 0)
   {
     close(fd);
@@ -797,8 +802,8 @@ int streamOff()
   return PASS;
 }
 
-//GRAB FRAME API
-int grabFrame(unsigned char *data,int *bytesused)
+
+int startRender()
 {
   if(queryCap()!=PASS)
   {
@@ -825,20 +830,23 @@ int grabFrame(unsigned char *data,int *bytesused)
     printf("\nSTREAM ON FAILED");
     return FAIL;
   }
-  if(dequeueBuffer()!=PASS)
-  {
-    printf("\nDEQUEUE BUFFER FAILED");
-    return FAIL;
-  }
+  // if(dequeueBuffer()!=PASS)
+  // {
+  //   printf("\nDEQUEUE BUFFER FAILED");
+  //   return FAIL;
+  // }
+  
+
+}
+
+//GRAB FRAME API
+int grabFrame(unsigned char *data,int *bytesused)
+{
+  startRender();
   //data=(unsigned char*)malloc(bytesUsed);
   *bytesused=bytesUsed;
   memcpy(data,temp_buffer,*bytesused);
 
-  if(streamOff()!=PASS)
-  {
-    printf("\nSTREAM OFF FAILED");
-    return FAIL;
-  }
   printf("\nFRAME GRABBED\n");
   return PASS;
 }

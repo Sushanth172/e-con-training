@@ -9,6 +9,7 @@
 
 int main()
 {
+  FILE *fd= NULL;
   int count=0,indexFromUser,retVal=0;
   char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
   char productId[MAX_CHAR], vendorId[MAX_CHAR];
@@ -17,7 +18,9 @@ int main()
   char pixelFormat[MAX_CHAR]; //REQUIRED DECLARATIONS FOR GET DEVICE FORMAT
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
   int formats=0;
-  unsigned char *buffer = (unsigned char*)malloc(640*480);
+  int bytesused=0;  //USED TO STORE THE BYTES USED IN QUEUE
+  int fwrite_validation;
+  unsigned char *buffer=NULL;
 
   //TO GET NUMBER OF DEVICES CONNECTED
   getDeviceCount(&count);
@@ -39,7 +42,7 @@ int main()
   if(indexFromUser <= count && indexFromUser != 0)
   {
     //CALLING API TO GET DEVICE INFO
-    getDeviceInfo(serialNumber,deviceName,productId,vendorId,devicePath,indexFromUser);
+    getDeviceInfo(indexFromUser,serialNumber,deviceName,productId,vendorId,devicePath);
     printf("\n-------------------DEVICE %d DATA-----------------------",indexFromUser);
     printf("\nDEVICE INDEX:%d\nSERIAL NO   :%s\nDEVICE NAME :%s\nPRODUCT ID  :%s\nVENDOR ID   :%s\nDEVICE PATH :%s\n",indexFromUser,serialNumber,deviceName,productId,vendorId,devicePath);
     printf("\n--------------------------------------------------------\n");
@@ -100,12 +103,30 @@ int main()
     printf("\nHEIGHT       :%d\n",frame_height);
     printf("WIDTH        :%d\n",frame_width);
     printf("PIXEL FORMAT :%s\n",pixelFormat);
+    buffer = (unsigned char*)malloc(frame_width*frame_height*2);
     //VALIDATING GRAB FRAME
-    if(grabFrame(buffer)!=PASS)
+    if(grabFrame(buffer,&bytesused)!=PASS)
     {
-      printf("\nGRAB FRAME IS FAILED!!");
+      printf("\nGRAB FRAME IS FAILED!!\n");
       return FAIL;
     }
+    printf("BYTES USED...SAMPLE APP:%d\n",bytesused);
+    fd = fopen("/home/sushanth/Git/e-con-training/V4L2Library/frame.raw","wb");
+    if(fd==NULL)
+    {
+     printf("\nERROR IN OPENING FILE\n");
+    }
+    //WRITING THE BUFFER INTO THE FILE FRAME.RAW
+    fwrite_validation=fwrite(buffer,bytesused,1,fd);
+
+    //FWRITE VALIDATION
+    if(fwrite_validation != PASS)
+    {
+     printf("ERROR IN WRITING THE FILE...");
+     fclose(fd);
+     return FAIL;
+    }
+    fclose(fd);
   }
   else
   {

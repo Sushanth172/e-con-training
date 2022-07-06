@@ -1,6 +1,7 @@
 #include "v4l2dev.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <libudev.h>
 #include <libusb-1.0/libusb.h>
 #include <libv4l2.h>
@@ -15,18 +16,19 @@
 #define FAIL -1
 #define PIXEL_FORMAT 5
 #define BUFFER_COUNT 3
+#define CLEAR(x) memset(&(x), 0, sizeof(x))
 
 struct buffer{
   void   *start;
   size_t  length;
 };
-
+int bytesUsed=0;
 int refIndex=0;
 int fd=-1;
 struct v4l2_buffer buf;
 struct v4l2_requestbuffers req;
-struct buffer *buffers=NULL;
-char *temp_buffer =NULL;
+struct buffer *buffers = NULL;
+char *temp_buffer = NULL;
 struct v4l2_capability cam_cap;  //For getting capability of that device
 
 #define fun m##a##i##n
@@ -52,7 +54,8 @@ int checkForValidNode(const char *dev_path)
   }
 
   close(cam_fd);
-  if (cam_cap.device_caps & V4L2_CAP_META_CAPTURE)                //If this Flag is enable that means invalid node
+  //IF THE DEVICE CAPS FLAG IS ENABLED.....INVALID NODE
+  if (cam_cap.device_caps & V4L2_CAP_META_CAPTURE)
   {
     // printf("\nTHIS IS INVALID NODE\n");
     return FAIL;
@@ -421,7 +424,7 @@ int closeDevice()
 }
 
 //DISPLAYS THE INFORMATION OF THE DEVICE WITH THE SPECIFIC INDEX
-int getDeviceInfo(char *serialNumber, char *device_Name, char *productId,char *vendorId, char *devicePath, int deviceIndex)
+int getDeviceInfo(int deviceIndex,char *serialNumber, char *device_Name, char *productId,char *vendorId, char *devicePath)
 {
   struct udev *udev;
   struct udev_device *device,*parentdevice;
@@ -591,6 +594,17 @@ int getDeviceCount(int *numberOfDevices)
   udev_unref(udev);                 // FREE UDEV
   return PASS;
 }
+//DO IOCTL UNTILL THE RESOURCE IS AVAILABLE(RESOURCE TEMPORARILY UNAVAILABLE)
+int xioctl(int fd,int request, void *arg)
+{
+    int resouceAvailableIndex;
+    do {
+        resouceAvailableIndex = ioctl(fd, request, arg);
+    } while (resouceAvailableIndex == -1 && EAGAIN == errno);  //do ioctl until there is no EAGAIN error(resource temporarily unavailable, try again)
+
+    return resouceAvailableIndex;
+}
+
 //CHECKING THE CAPABILITY OF THE DEVICE USING QUERYCAP
 int queryCap()
 {
@@ -615,6 +629,7 @@ int queryCap()
 //REQUEST FOR BUFFER
 int requestBuffer()
 {
+  CLEAR(req);
   req.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   req.count  = BUFFER_COUNT;
   req.memory = V4L2_MEMORY_MMAP;
@@ -647,11 +662,13 @@ int requestBuffer()
 //QUERRYING THE BUFFER
 int querryBuffer()
 {
+  CLEAR(buf);
   if(fd < 0)
   {
     printf("\nFAILED IN OPENING THE DEVICE(QUERY BUFFER)\n");
     return FAIL;
   }
+  //printf("querrybufferBEFORE:%d\n",buf.length);
   for(int index=0;index<req.count;index++)
   {
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -667,28 +684,13 @@ int querryBuffer()
 
     buffers[index].length = buf.length;
     buffers[index].start=mmap(NULL,buf.length,PROT_READ|PROT_WRITE,MAP_SHARED,fd,buf.m.offset);
+    //printf("querrybufferAFTER:%d\n",buf.length);
 
     if(buffers[index].start == MAP_FAILED) //VALIDATING FOR MMAP FAILURE
     {
       printf("MAPPING FAILED!\n");
       return FAIL;
     }
-  }
-  return PASS;
-}
-
-//SWITCHING ON THE STREAM
-int streamOn()
-{
-  if(fd < 0)
-  {
-    printf("\nFAILED IN OPENING THE DEVICE(STREAM ON)\n");
-    return FAIL;
-  }
-  if(ioctl(fd,VIDIOC_STREAMON,&buf.type)<0)                       //streaming on the device
-  {
-    printf("STREAMING IS FAILED!!\n");
-    return FAIL;
   }
   return PASS;
 }
@@ -701,47 +703,84 @@ int queueBuffer()
     printf("\nFAILED IN OPENING THE DEVICE(QUEUE BUFFER)\n");
     return FAIL;
   }
+  //printf("BEFORE:%d\n",buf.bytesused);
   for(int index=0;index<req.count;index++)
   {
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
     buf.index = index;
-    if(ioctl(fd,VIDIOC_QBUF,&buf)<0)                           //checking if queue buffer is successful
+    //VALIDATING QUEUE BUFFER
+    if(xioctl(fd,VIDIOC_QBUF,&buf)<0)
     {
-      printf("ENQUEING FAILED\n");
+      printf("ENQUEUING FAILED\n");
       return FAIL;
     }
   }
+  // printf("\nAFTER:%d\n",buf.bytesused);
+  // printf("\nTYPE:%d\n",buf.type);
+  // printf("\nFLAGS:%d\n",buf.flags);
+  // printf("\nSEQUENCE:%d\n",buf.sequence);
+  // printf("\nFIELD:%d\n",buf.field);
   return PASS;
 }
-//DEQUEUE BUFFER
+
+//SWITCHING ON THE STREAM
+int streamOn()
+{
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(STREAM ON)\n");
+    return FAIL;
+  }
+  if(xioctl(fd,VIDIOC_STREAMON,&buf.type)<0)                       //streaming on the device
+  {
+    printf("STREAMING IS FAILED!!\n");
+    return FAIL;
+  }
+  return PASS;
+}
+
+//DEQUEUE BUFFER WHICH ENQUEUED IN QUEUE_BUFFER
 int dequeueBuffer()
 {
+  CLEAR(buf);
   if(fd < 0)
   {
     printf("\nFAILED IN OPENING THE DEVICE(DEQUEUE BUFFER)\n");
     return FAIL;
   }
-  for(int dequeue=0;dequeue<req.count;dequeue++)
+  int dequeueIndex=0;
+  int ioctlReturn;
+  //printf("\nbefore While\n");
+  while(dequeueIndex < 12)
   {
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
-    if(ioctl(fd, VIDIOC_DQBUF,&buf)<0)                         //checking if dequeue is successful
+    //printf("before\n");
+    //VALIDATING DEQUEUE BUFFER
+    ioctlReturn = xioctl(fd,VIDIOC_DQBUF,&buf);
+    //printf("IOCTL RETURNS %d\n",ioctlReturn);
+    if(ioctlReturn < 0)
     {
+      printf("SOMETHING WENT WRONG:%s\n", strerror(errno));
       printf("DEQUEUE FAILED!\n");
       return FAIL;
     }
+    //ALLOCATING MEMORY FOR TEMP_BUFFER
     temp_buffer = (unsigned char *)realloc((unsigned char*)temp_buffer,buf.bytesused);
     memcpy(temp_buffer,(unsigned char *)buffers[buf.index].start,buf.bytesused);
-    if(ioctl(fd, VIDIOC_QBUF,&buf)<0)                         //checking if dequeue is successful
+    bytesUsed = buf.bytesused;
+    //printf("BYTES USED...DEQUEUE:%d\n",bytesUsed);
+    //VALIDATING QUEUE BUFFER
+    if(xioctl(fd, VIDIOC_QBUF,&buf)<0)
     {
-      printf("QUEUE FAILED inside dequeue buffer!\n");
+      printf("QUEUE FAILED INSIDE DEQUEUE BUFFER!\n");
       return FAIL;
     }
+   dequeueIndex++;
   }
-return PASS;
+  return PASS;
 }
-
 //SWITCHING OFF THE STREAM
 int streamOff()
 {
@@ -750,7 +789,7 @@ int streamOff()
     printf("\nFAILED IN OPENING THE DEVICE(STREAM OFF)\n");
     return FAIL;
   }
-  if(ioctl(fd, VIDIOC_STREAMOFF, &buf.type)<0)                    //streaming off the device
+  if(xioctl(fd, VIDIOC_STREAMOFF, &buf.type)<0)                    //streaming off the device
   {
     printf("STREAM OFF FAILED\n");
     return FAIL;
@@ -759,27 +798,26 @@ int streamOff()
 }
 
 //GRAB FRAME API
-int grabFrame(unsigned char *data)
+int grabFrame(unsigned char *data,int *bytesused)
 {
-  //printf("\nBUFFER OPERATIONS STARTED\n");
   if(queryCap()!=PASS)
   {
-    printf("\nQUERY CAPABILITY FAILED");
+    printf("\nQUERY CAPABILITY FAILED\n");
     return FAIL;
   }
   if(requestBuffer()!=PASS)
   {
-    printf("\nREQUEST BUFFER FAILED");
+    printf("\nREQUEST BUFFER FAILED\n");
     return FAIL;
   }
   if(querryBuffer()!=PASS)
   {
-    printf("\nQUERRY BUFFER FAILED");
+    printf("\nQUERRY BUFFER FAILED\n");
     return FAIL;
   }
   if(queueBuffer()!=PASS)
   {
-    printf("\nQUEUE BUFFER FAILED");
+    printf("\nQUEUE BUFFER FAILED\n");
     return FAIL;
   }
   if(streamOn()!=PASS)
@@ -792,12 +830,15 @@ int grabFrame(unsigned char *data)
     printf("\nDEQUEUE BUFFER FAILED");
     return FAIL;
   }
-  memcpy(data,temp_buffer,640*480);
+  //data=(unsigned char*)malloc(bytesUsed);
+  *bytesused=bytesUsed;
+  memcpy(data,temp_buffer,*bytesused);
 
   if(streamOff()!=PASS)
   {
     printf("\nSTREAM OFF FAILED");
     return FAIL;
   }
+  printf("\nFRAME GRABBED\n");
   return PASS;
 }

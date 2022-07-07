@@ -2,6 +2,7 @@
 #include "v4l2dev.h"
 #include <libudev.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <libusb-1.0/libusb.h>
 #define MAX_CHAR 100
 #define PASS 1
@@ -28,12 +29,14 @@ int main()
   //GET FORMAT TYPE
   int fps;
   char formatType[MAX_CHAR];
+
   //PRINTING THE NUMBER OF DEVICES CONNECTED
   printf("\nNUMBER OF V4L2 DEVICES CONNECTED:%d",count);
   if(count == 0)
   {
     return FAIL;
   }
+
   //GETTING THE DEVICE INDEX FROM USER TO DISPLAY RESPECTIVE DEVICE' DATA
   printf("\nENTER THE DEVICE INDEX:");
   scanf("%d",&indexFromUser);
@@ -65,11 +68,12 @@ int main()
     retVal = openDevice(indexFromUser);
 
     if(retVal<=0)
-      printf("ERROR IN OPENING THE DEVICE...");
+    printf("ERROR IN OPENING THE DEVICE...");
     else
     {
       printf("\n-------------------------------------DEVICE %d CURRENT FORMAT-------------------------------------------",indexFromUser);
     }
+
     //API TO GET CURRENT FORMAT OF THE DEVICE
     getCurrentFormat(&frame_height,&frame_width,pixelFormat);
     printf("\nHEIGHT       :%d\n",frame_height);
@@ -83,7 +87,7 @@ int main()
     printf("\n---------------------------PIXEL FORMATS AVAILABLE IN THE DEVICE---------------------------------------");
 
     /* ITERATE THE TOTAL FORMATS ONE BY ONE AND CALLING THE API
-       WHICH DISPLAYS ALL THE FORMATS SUPPORTED BY THE DEVICE */
+    WHICH DISPLAYS ALL THE FORMATS SUPPORTED BY THE DEVICE */
     for(int formatIterator=0;formatIterator<formats;formatIterator++)
     {
       getFormatType(formatIterator,formatType,&width,&height,&fps);
@@ -97,26 +101,43 @@ int main()
     {
       setFormat(formatIndexFromUser);
     }
+
     //GETTING THE CURRENT FORMAT OF THE DEVICE AFTER THE FORMAT HAS BEEN SET BY getFormatType API
     getCurrentFormat(&frame_height,&frame_width,pixelFormat);
     printf("\n-------------------------------------DEVICE %d CURRENT FORMAT-------------------------------------------",indexFromUser);
     printf("\nHEIGHT       :%d\n",frame_height);
     printf("WIDTH        :%d\n",frame_width);
     printf("PIXEL FORMAT :%s\n",pixelFormat);
+
     buffer = (unsigned char*)malloc(frame_width*frame_height*2);
 
-    //VALIDATING GRAB FRAME
-    if(grabFrame(buffer,&bytesused)!=PASS)
-    {
-      printf("\nGRAB FRAME IS FAILED!!\n");
-      return FAIL;
-    }
-    printf("BYTES USED...SAMPLE APP:%d\n",bytesused);
+    //API TO START THE RENDERING AND TO CREATE THE THREAD OPERATION
+    startRender();
+
+    //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
+    sleep(3);
+
+    //OPENING THE FILE WITH APPEND BINARY MODE
     fd = fopen("/home/sushanth/Git/e-con-training/V4L2Library/frame.raw","wb");
     if(fd==NULL)
     {
-     printf("\nERROR IN OPENING FILE\n");
+      printf("\nERROR IN OPENING FILE\n");
     }
+
+    buffer=grabFrame(buffer,&bytesused);
+    if(buffer==NULL)
+    {
+      printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+    }
+    // for(int i=0;i<3;i++)
+    // {
+    //VALIDATING GRAB FRAME
+    // if(grabFrame(buffer,&bytesused)!=PASS)
+    // {
+    //   printf("\nGRAB FRAME IS FAILED!!\n");
+    //   return FAIL;
+    // }
+    //printf("BYTES USED...SAMPLE APP:%d\n",bytesused);
 
     //WRITING THE BUFFER INTO THE FILE FRAME.RAW
     fwrite_validation=fwrite(buffer,bytesused,1,fd);
@@ -124,10 +145,11 @@ int main()
     //FWRITE VALIDATION
     if(fwrite_validation != PASS)
     {
-     printf("\nERROR IN WRITING THE FILE...\n");
-     fclose(fd);
-     return FAIL;
+      printf("\nERROR IN WRITING THE FILE...\n");
+      fclose(fd);
+      return FAIL;
     }
+    // }
     fclose(fd);
   }
   else
@@ -135,6 +157,7 @@ int main()
     printf("\nINVALID DEVICE INDEX!!\n");
   }
   //CLOSING THE DEVICE
+  free(buffer);
   closeDevice();
   return PASS;
 }

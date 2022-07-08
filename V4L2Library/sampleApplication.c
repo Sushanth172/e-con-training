@@ -94,6 +94,7 @@ int main()
       printf("\n%d\tPIXEL FORMAT: %s\tHEIGHT: %d\tWIDTH: %d\tFRAMES PER SECOND : %d\t\n",formatIterator+1,formatType,height,width,fps);
       printf("-------------------------------------------------------------------------------------------------------");
     }
+
     //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
     printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT:");
     scanf("%d",&formatIndexFromUser);
@@ -124,20 +125,11 @@ int main()
       printf("\nERROR IN OPENING FILE\n");
     }
 
-    buffer=grabFrame(buffer,&bytesused);
+    buffer=grabFrame(&bytesused);
     if(buffer==NULL)
     {
       printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
     }
-    // for(int i=0;i<3;i++)
-    // {
-    //VALIDATING GRAB FRAME
-    // if(grabFrame(buffer,&bytesused)!=PASS)
-    // {
-    //   printf("\nGRAB FRAME IS FAILED!!\n");
-    //   return FAIL;
-    // }
-    //printf("BYTES USED...SAMPLE APP:%d\n",bytesused);
 
     //WRITING THE BUFFER INTO THE FILE FRAME.RAW
     fwrite_validation=fwrite(buffer,bytesused,1,fd);
@@ -149,13 +141,13 @@ int main()
       fclose(fd);
       return FAIL;
     }
-    // }
     fclose(fd);
   }
   else
   {
     printf("\nINVALID DEVICE INDEX!!\n");
   }
+
   //CLOSING THE DEVICE
   free(buffer);
   closeDevice();

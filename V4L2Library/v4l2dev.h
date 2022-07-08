@@ -72,7 +72,7 @@ TO SET THE FORMAT TO THE DEVICE
 
 **************************************************************************************************************************
 */
-int setFormat(int formatIndexFromUser);
+int setFormat(int setFormatIndex);
 
 int startRender();
 
@@ -83,7 +83,7 @@ TO GRAB THE FRAME
 **************************************************************************************************************************
 */
 // int grabFrame(unsigned char *data,int *bytesused);
-unsigned char *grabFrame(unsigned char *data,int *bytesused);
+unsigned char *grabFrame(int *bytesused);
 
 //TO CLOSE THE DEVICE
 int closeDevice();

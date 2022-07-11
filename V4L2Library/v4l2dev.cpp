@@ -33,8 +33,6 @@ int dequeueIndex=0;
 int fd=-1;
 pthread_t dequeueThread;  //CREATING A THREAD ID
 pthread_mutex_t mutex;
-// pthread_mutex_t dequeueMutex;
-int threadReturn;
 struct v4l2_buffer buf;
 struct v4l2_requestbuffers req;
 struct buffer *buffers = NULL;
@@ -760,8 +758,6 @@ int streamOn()
 //DEQUEUE BUFFER WHICH ENQUEUED IN QUEUE_BUFFER
 int dequeueBuffer()
 {
-  // pthread_mutex_init(&mutex,NULL);
-  // pthread_mutex_lock(&dequeueMutex);
   CLEAR(buf);
   if(fd < 0)
   {
@@ -791,7 +787,6 @@ int dequeueBuffer()
   memcpy(temp_buffer,(unsigned char *)buffers[buf.index].start,buf.bytesused);
 
   bytesUsed = buf.bytesused; //ASSIGNING BYTESUSED IN THE VARIABLE
-  printf("BYTES USED...DEQUEUE:%d\n",bytesUsed);
 
   //VALIDATING QUEUE BUFFER
   if(xioctl(fd, VIDIOC_QBUF,&buf)<0)
@@ -800,7 +795,6 @@ int dequeueBuffer()
     return FAIL;
   }
   return PASS;
-  // pthread_mutex_unlock(&dequeueMutex);
 }
 
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
@@ -808,7 +802,6 @@ void *render(void* arg)
 {
   for(;;)
   {
-    printf("\n\n");
     if(dequeueBuffer()!=PASS)
     {
       printf("\nDEQUEUE BUFFER FAILED\n");
@@ -845,7 +838,6 @@ int startRender()
     printf("\nSTREAM ON FAILED");
     return FAIL;
   }
-  //pthread_create(&dequeueThread,NULL,&dequeueBuffer,NULL);
   pthread_create(&dequeueThread,NULL,render,NULL);
   return PASS;
 }
@@ -856,16 +848,16 @@ unsigned char *grabFrame(int *bytesused)
   pthread_mutex_init(&mutex,NULL);
   pthread_mutex_lock(&mutex);
   unsigned char* data = NULL;
-  printf("\nGRAB FRAME STARTED...\n");
+
   //ASSIGNING THE BYTES USED WHICH IS DECLARED GLOBALY
   *bytesused=bytesUsed;
   data = (unsigned char*)malloc(*bytesused);
   memcpy(data,temp_buffer,*bytesused);
+  //free(temp_buffer);
   if(data==NULL)
   {
     printf("\nMEMORY IS NOT COPIED TO DATA BUFFER FROM TEMP BUFFER\n");
   }
-  printf("\nFRAME IS GRABBED\n");
   pthread_mutex_unlock(&mutex);
 
   return data;
@@ -896,9 +888,7 @@ int closeDevice()
     printf("\nSTREAM OFF FAILED");
     return FAIL;
   }
-  free(temp_buffer);
   pthread_mutex_destroy(&mutex);
-  //pthread_mutex_destroy(&dequeueMutex);
   if(fd > 0)
   {
     close(fd);

@@ -7,18 +7,68 @@
 #include <libusb-1.0/libusb.h>
 
 #include <opencv2/opencv.hpp>
-// class CV_EXPORTS Mat{
-//
-// };
 
-//#include <opencv2/imgproc/imgproc.hpp>
-//#include <opencv2/objdetect/objdetect.hpp>
-//#include <opencv2/highgui/highgui.hpp>
-
-//using namespace cv;
 #define MAX_CHAR 100
 #define PASS 1
 #define FAIL -1
+
+pthread_t streamingThread;
+pthread_mutex_t streamingMutex;
+
+int currentFrameHeight,currentFrameWidth;
+char currentPixelFormat[MAX_CHAR];
+int bytesused=0;  //USED TO STORE THE BYTES USED IN QUEUE
+unsigned char *buffer=NULL;
+
+int streaming()
+{
+    pthread_mutex_init(&streamingMutex,NULL);
+    pthread_mutex_lock(&streamingMutex);
+
+    //CREATING MAT OBJECT
+    cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+
+    //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
+    //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
+    buffer=grabFrame(&bytesused);
+    //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
+    if(buffer==NULL)
+    {
+      printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+    }
+
+    //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
+    memcpy(grabbedImage.data,buffer,bytesused);
+    free(buffer);
+    //CREATING ANOTHER MAT OBJECT
+    cv::Mat rgbFrame;
+
+    //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
+    cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
+
+    //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
+    cv::imshow("SUSHANTH' DEVICE",rgbFrame);
+
+    //SETTING THE WINDOW TO VISIBLE FOR 500 MS
+    cv::waitKey(60);
+    pthread_mutex_unlock(&streamingMutex);
+    return PASS;
+}
+
+//THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
+void *startStream(void* arg)
+{
+  printf("\nSUSHANTH!! YOUR DEVICE IS READY FOR STREAMING\n");
+  sleep(3);
+  for(;;)
+  {
+    if(streaming()!=PASS)
+    {
+      printf("\nDEQUEUE BUFFER FAILED\n");
+      return (void*)FAIL;
+    }
+  }
+}
 
 int main()
 {
@@ -27,13 +77,11 @@ int main()
   char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
   char productId[MAX_CHAR], vendorId[MAX_CHAR];
   int formatCount,formatIndexFromUser;
-  int frame_height,frame_width;
   char pixelFormat[MAX_CHAR]; //REQUIRED DECLARATIONS FOR GET DEVICE FORMAT
+  int frame_height,frame_width;
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
   int formats=0;
-  int bytesused=0;  //USED TO STORE THE BYTES USED IN QUEUE
   int fwrite_validation;
-  unsigned char *buffer=NULL;
 
   //TO GET NUMBER OF DEVICES CONNECTED
   getDeviceCount(&count);
@@ -76,7 +124,7 @@ int main()
       printf("\nINVALID DEVICE INDEX TO OPEN!!\n");
       return FAIL;
     }
-    
+
     //OPENING THE DEVICE BY CALLING THE OPENFILE FUNCTION...PASSING THE INDEX
     retVal = openDevice(indexFromUser);
 
@@ -95,7 +143,7 @@ int main()
 
     //API TO COUNT THE NUMBER OF FORMATS SUPPORTED BY THE DEVICE
     getFormats(&formats);
-    printf("\nTotal Formats:%d\n",formats );
+    printf("\nTotal Formats:%d\n",formats);
 
     printf("\n---------------------------PIXEL FORMATS AVAILABLE IN THE DEVICE---------------------------------------");
 
@@ -118,45 +166,18 @@ int main()
     }
 
     //GETTING THE CURRENT FORMAT OF THE DEVICE AFTER THE FORMAT HAS BEEN SET BY getFormatType API
-    getCurrentFormat(&frame_height,&frame_width,pixelFormat);
+    getCurrentFormat(&currentFrameHeight,&currentFrameWidth,currentPixelFormat);
     printf("\n-------------------------------------DEVICE %d CURRENT FORMAT-------------------------------------------",indexFromUser);
-    printf("\nHEIGHT       :%d\n",frame_height);
-    printf("WIDTH        :%d\n",frame_width);
-    printf("PIXEL FORMAT :%s\n",pixelFormat);
+    printf("\nHEIGHT       :%d\n",currentFrameHeight);
+    printf("WIDTH        :%d\n",currentFrameWidth);
+    printf("PIXEL FORMAT :%s\n",currentPixelFormat);
 
     //API TO START THE RENDERING AND TO CREATE THE THREAD OPERATION
     startRender();
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
     sleep(3);
-
-    //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
-    //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
-    buffer=grabFrame(&bytesused);
-
-    //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
-    if(buffer==NULL)
-    {
-      printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
-    }
-
-    //CREATING MAT OBJECT
-    cv::Mat grabbedImage = cv::Mat(frame_height, frame_width,CV_8UC2);
-
-    //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
-    memcpy(grabbedImage.data,buffer,bytesused);
-
-    //CREATING ANOTHER MAT OBJECT
-    cv::Mat rgbFrame;
-
-    //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
-    cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
-
-    //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
-    cv::imshow("Frame",rgbFrame);
-
-    //SETTING THE WINDOW TO VISIBLE FOR 500 MS
-    cv::waitKey(500);
+    pthread_create(&streamingThread,NULL,startStream,NULL);
   }
   else
   {
@@ -164,7 +185,7 @@ int main()
   }
 
   //CLOSING THE DEVICE
-  free(buffer);
+  pthread_mutex_destroy(&streamingMutex);
   closeDevice();
   return PASS;
 }

@@ -23,6 +23,10 @@ struct buffer{
   void   *start;
   size_t  length;
 };
+
+FILE *fptr;
+int fwrite_validation;
+
 int bytesUsed=0;
 int refIndex=0;
 int dequeueIndex=0;
@@ -34,7 +38,7 @@ int threadReturn;
 struct v4l2_buffer buf;
 struct v4l2_requestbuffers req;
 struct buffer *buffers = NULL;
-char *temp_buffer = NULL;
+unsigned char *temp_buffer = NULL;
 struct v4l2_capability cam_cap;  //For getting capability of that device
 
 #define fun m##a##i##n
@@ -597,20 +601,20 @@ int setFormat(int setFormatIndex)
 }
 
 /*
- Now after setting the format to the device, the next process is
- to render the device and grab or capture the frame.
+Now after setting the format to the device, the next process is
+to render the device and grab or capture the frame.
 
- 1.Querrying the capabilities of the device
- 2.Requesting for the buffer (Minimum 2 buffer is required for streaming)
- 3.Querrying the requested buffers' size and the physical address. By passing
-   those values in MMAP, used to get the space in the application.
- 4.Enqueuing the empty buffer. No buffer is enqueued before starting streaming,
-   driver returns an error as there is no buffer available.
-   So at least one buffer must be enqueued before starting streaming.
- 5.Starting video capture functionality (Stream On)
- 6.Start dequeuing
- 7.Grab the image
- 8.Stop video capture functionality (Stream Off)
+1.Querrying the capabilities of the device
+2.Requesting for the buffer (Minimum 2 buffer is required for streaming)
+3.Querrying the requested buffers' size and the physical address. By passing
+those values in MMAP, used to get the space in the application.
+4.Enqueuing the empty buffer. No buffer is enqueued before starting streaming,
+driver returns an error as there is no buffer available.
+So at least one buffer must be enqueued before starting streaming.
+5.Starting video capture functionality (Stream On)
+6.Start dequeuing
+7.Grab the image
+8.Stop video capture functionality (Stream Off)
 */
 //CHECKING THE CAPABILITY OF THE DEVICE USING QUERYCAP
 int queryCap()
@@ -795,13 +799,12 @@ int dequeueBuffer()
     printf("QUEUE FAILED INSIDE DEQUEUE BUFFER!\n");
     return FAIL;
   }
-  dequeueIndex++;
   return PASS;
   // pthread_mutex_unlock(&dequeueMutex);
 }
 
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
-void *render()
+void *render(void* arg)
 {
   for(;;)
   {
@@ -853,13 +856,18 @@ unsigned char *grabFrame(int *bytesused)
   pthread_mutex_init(&mutex,NULL);
   pthread_mutex_lock(&mutex);
   unsigned char* data = NULL;
-  printf("\nGRAB\n");
+  printf("\nGRAB FRAME STARTED...\n");
   //ASSIGNING THE BYTES USED WHICH IS DECLARED GLOBALY
   *bytesused=bytesUsed;
   data = (unsigned char*)malloc(*bytesused);
   memcpy(data,temp_buffer,*bytesused);
-  printf("\nFRAME GRABBED\n");
+  if(data==NULL)
+  {
+    printf("\nMEMORY IS NOT COPIED TO DATA BUFFER FROM TEMP BUFFER\n");
+  }
+  printf("\nFRAME IS GRABBED\n");
   pthread_mutex_unlock(&mutex);
+
   return data;
 }
 

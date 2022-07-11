@@ -2,15 +2,27 @@
 #include "v4l2dev.h"
 #include <libudev.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <libusb-1.0/libusb.h>
+
+#include <opencv2/opencv.hpp>
+// class CV_EXPORTS Mat{
+//
+// };
+
+//#include <opencv2/imgproc/imgproc.hpp>
+//#include <opencv2/objdetect/objdetect.hpp>
+//#include <opencv2/highgui/highgui.hpp>
+
+//using namespace cv;
 #define MAX_CHAR 100
 #define PASS 1
 #define FAIL -1
 
 int main()
 {
-  FILE *fd= NULL;
+  FILE *fptr= NULL;
   int count=0,indexFromUser,retVal=0;
   char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
   char productId[MAX_CHAR], vendorId[MAX_CHAR];
@@ -64,6 +76,7 @@ int main()
       printf("\nINVALID DEVICE INDEX TO OPEN!!\n");
       return FAIL;
     }
+    
     //OPENING THE DEVICE BY CALLING THE OPENFILE FUNCTION...PASSING THE INDEX
     retVal = openDevice(indexFromUser);
 
@@ -98,6 +111,7 @@ int main()
     //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
     printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT:");
     scanf("%d",&formatIndexFromUser);
+
     if(formatIndexFromUser <= formats && formatIndexFromUser != 0)
     {
       setFormat(formatIndexFromUser);
@@ -110,38 +124,39 @@ int main()
     printf("WIDTH        :%d\n",frame_width);
     printf("PIXEL FORMAT :%s\n",pixelFormat);
 
-    buffer = (unsigned char*)malloc(frame_width*frame_height*2);
-
     //API TO START THE RENDERING AND TO CREATE THE THREAD OPERATION
     startRender();
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
     sleep(3);
 
-    //OPENING THE FILE WITH APPEND BINARY MODE
-    fd = fopen("/home/sushanth/Git/e-con-training/V4L2Library/frame.raw","wb");
-    if(fd==NULL)
-    {
-      printf("\nERROR IN OPENING FILE\n");
-    }
-
+    //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
+    //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
     buffer=grabFrame(&bytesused);
+
+    //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
     if(buffer==NULL)
     {
       printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
     }
 
-    //WRITING THE BUFFER INTO THE FILE FRAME.RAW
-    fwrite_validation=fwrite(buffer,bytesused,1,fd);
+    //CREATING MAT OBJECT
+    cv::Mat grabbedImage = cv::Mat(frame_height, frame_width,CV_8UC2);
 
-    //FWRITE VALIDATION
-    if(fwrite_validation != PASS)
-    {
-      printf("\nERROR IN WRITING THE FILE...\n");
-      fclose(fd);
-      return FAIL;
-    }
-    fclose(fd);
+    //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
+    memcpy(grabbedImage.data,buffer,bytesused);
+
+    //CREATING ANOTHER MAT OBJECT
+    cv::Mat rgbFrame;
+
+    //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
+    cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
+
+    //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
+    cv::imshow("Frame",rgbFrame);
+
+    //SETTING THE WINDOW TO VISIBLE FOR 500 MS
+    cv::waitKey(500);
   }
   else
   {

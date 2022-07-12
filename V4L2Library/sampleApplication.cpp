@@ -5,69 +5,82 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <libusb-1.0/libusb.h>
-
 #include <opencv2/opencv.hpp>
 
 #define MAX_CHAR 100
+#define MILLISECONDS 1000
 #define PASS 1
 #define FAIL -1
 
 pthread_t streamingThread;
 pthread_mutex_t streamingMutex;
-
+bool running = true;
+int fps;
 int currentFrameHeight,currentFrameWidth;
 char currentPixelFormat[MAX_CHAR];
 int bytesused=0;  //USED TO STORE THE BYTES USED IN QUEUE
 unsigned char *buffer=NULL;
 
+/*
+  THIS IS THE FUNCTION WHICH IS LOCKED BY MUTEX LOCKING MECHANISM
+  AND IS CALLED INFINITELY IN STARTSTREAM FUNCTION WHICH RUNS ON
+  SEPERATE THREAD
+*/
 int streaming()
 {
-    pthread_mutex_init(&streamingMutex,NULL);
-    pthread_mutex_lock(&streamingMutex);
+  pthread_mutex_init(&streamingMutex,NULL);
+  pthread_mutex_lock(&streamingMutex);
 
-    //CREATING MAT OBJECT
-    cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+  //CREATING MAT OBJECT
+  cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
 
-    //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
-    //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
-    buffer=grabFrame(&bytesused);
-    //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
-    if(buffer==NULL)
-    {
-      printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
-    }
+  //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
+  //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
+  buffer=grabFrame(&bytesused);
 
-    //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
-    memcpy(grabbedImage.data,buffer,bytesused);
+  //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
+  if(buffer==NULL)
+  {
+    printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+  }
+
+  //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
+  memcpy(grabbedImage.data,buffer,bytesused);
+
+  //FREE THE BUFFER MEMORY EVERYTIME THE MEMCPY IS OVER
+  if(buffer!=NULL)
+  {
     free(buffer);
-    //CREATING ANOTHER MAT OBJECT
-    cv::Mat rgbFrame;
+    buffer=NULL;
+  }
 
-    //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
-    cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
+  //CREATING ANOTHER MAT OBJECT
+  cv::Mat rgbFrame;
 
-    //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
-    cv::imshow("SUSHANTH' DEVICE",rgbFrame);
+  //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
+  cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
 
-    //SETTING THE WINDOW TO VISIBLE FOR 500 MS
-    cv::waitKey(60);
-    pthread_mutex_unlock(&streamingMutex);
-    return PASS;
+  //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
+  cv::imshow("STREAMING",rgbFrame);
+
+  //SETTING THE WINDOW TO VISIBLE FOR RESPECTIVE FRAMES PER SECONDS
+  cv::waitKey(MILLISECONDS/fps);
+
+  pthread_mutex_unlock(&streamingMutex);
+  return PASS;
 }
 
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
 void *startStream(void* arg)
 {
-  printf("\nSUSHANTH!! YOUR DEVICE IS READY FOR STREAMING\n");
-  sleep(3);
-  for(;;)
-  {
-    if(streaming()!=PASS)
+    while(running)
     {
-      printf("\nDEQUEUE BUFFER FAILED\n");
-      return (void*)FAIL;
+      if(streaming()!=PASS)
+      {
+        printf("\nDEQUEUE BUFFER FAILED\n");
+        return (void*)FAIL;
+      }
     }
-  }
 }
 
 int main()
@@ -80,14 +93,13 @@ int main()
   char pixelFormat[MAX_CHAR]; //REQUIRED DECLARATIONS FOR GET DEVICE FORMAT
   int frame_height,frame_width;
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
-  int formats=0;
+  int formats=0,exit=1;
   int fwrite_validation;
 
   //TO GET NUMBER OF DEVICES CONNECTED
   getDeviceCount(&count);
 
   //GET FORMAT TYPE
-  int fps;
   char formatType[MAX_CHAR];
 
   //PRINTING THE NUMBER OF DEVICES CONNECTED
@@ -176,16 +188,23 @@ int main()
     startRender();
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
-    sleep(3);
+    sleep(2);
     pthread_create(&streamingThread,NULL,startStream,NULL);
+    printf("\nPRESS 0 TO STOP STREAMING\n");
+    scanf("%d",&exit);
+    if(exit==0)
+    {
+      running = false;
+      pthread_exit((void*)streamingThread);
+      pthread_mutex_destroy(&streamingMutex);
+
+      //CLOSING THE DEVICE
+      closeDevice();
+    }
   }
   else
   {
     printf("\nINVALID DEVICE INDEX!!\n");
   }
-
-  //CLOSING THE DEVICE
-  pthread_mutex_destroy(&streamingMutex);
-  closeDevice();
   return PASS;
 }

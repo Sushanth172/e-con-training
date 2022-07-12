@@ -33,6 +33,7 @@ int dequeueIndex=0;
 int fd=-1;
 pthread_t dequeueThread;  //CREATING A THREAD ID
 pthread_mutex_t mutex;
+bool running = true;
 struct v4l2_buffer buf;
 struct v4l2_requestbuffers req;
 struct buffer *buffers = NULL;
@@ -151,8 +152,6 @@ int getDeviceCount(int *numberOfDevices)
     */
     if(checkForValidNode(dev_path)==PASS)
     {
-      //refIndex = refIndex | (1 << (int)(dev_path[10]-'0'));
-      //printf("Index: %d\nCount:%d\n",refIndex,count);
       count++;
     }
   }
@@ -489,8 +488,6 @@ int getFormatType(int formatIndex, char *formatType, int *width, int *height, in
         printf("\nFRAME SIZE IS NOT V4L2_FRMSIZE_TYPE_DISCRETE TYPE\n");
         return FAIL;
       }
-
-
     }
   }
   return PASS;
@@ -614,7 +611,8 @@ So at least one buffer must be enqueued before starting streaming.
 7.Grab the image
 8.Stop video capture functionality (Stream Off)
 */
-//CHECKING THE CAPABILITY OF THE DEVICE USING QUERYCAP
+
+//1.CHECKING THE CAPABILITY OF THE DEVICE USING QUERYCAP
 int queryCap()
 {
   struct v4l2_capability cap;
@@ -642,7 +640,7 @@ int queryCap()
   return PASS;
 }
 
-//REQUEST FOR BUFFER
+//2.REQUEST FOR BUFFER
 int requestBuffer()
 {
   CLEAR(req);
@@ -680,7 +678,7 @@ int requestBuffer()
   return PASS;
 }
 
-//QUERRYING THE BUFFER
+//3.QUERRYING THE BUFFER
 int querryBuffer()
 {
   CLEAR(buf);
@@ -715,7 +713,7 @@ int querryBuffer()
   return PASS;
 }
 
-//QUEUE BUFFER
+//4.QUEUE BUFFER
 int queueBuffer()
 {
   if(fd < 0)
@@ -738,7 +736,7 @@ int queueBuffer()
   return PASS;
 }
 
-//SWITCHING ON THE STREAM
+//5.SWITCHING ON THE STREAM
 int streamOn()
 {
   if(fd < 0)
@@ -755,7 +753,7 @@ int streamOn()
   return PASS;
 }
 
-//DEQUEUE BUFFER WHICH ENQUEUED IN QUEUE_BUFFER
+//6.DEQUEUE BUFFER WHICH ENQUEUED IN QUEUE_BUFFER
 int dequeueBuffer()
 {
   CLEAR(buf);
@@ -800,14 +798,14 @@ int dequeueBuffer()
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
 void *render(void* arg)
 {
-  for(;;)
-  {
-    if(dequeueBuffer()!=PASS)
+    while(running)
     {
-      printf("\nDEQUEUE BUFFER FAILED\n");
-      return (void*)FAIL;
+      if(dequeueBuffer()!=PASS)
+      {
+        printf("\nDEQUEUE BUFFER FAILED\n");
+        return (void*)FAIL;
+      }
     }
-  }
 }
 
 //API TO START RENDERING
@@ -842,7 +840,7 @@ int startRender()
   return PASS;
 }
 
-//API TO GRAB THE FRAME
+//7.API TO GRAB THE FRAME
 unsigned char *grabFrame(int *bytesused)
 {
   pthread_mutex_init(&mutex,NULL);
@@ -853,7 +851,7 @@ unsigned char *grabFrame(int *bytesused)
   *bytesused=bytesUsed;
   data = (unsigned char*)malloc(*bytesused);
   memcpy(data,temp_buffer,*bytesused);
-  //free(temp_buffer);
+
   if(data==NULL)
   {
     printf("\nMEMORY IS NOT COPIED TO DATA BUFFER FROM TEMP BUFFER\n");
@@ -866,6 +864,8 @@ unsigned char *grabFrame(int *bytesused)
 //SWITCHING OFF THE STREAM
 int streamOff()
 {
+  //DESTROYING THE MUTEX
+  pthread_mutex_destroy(&mutex);
   if(fd < 0)
   {
     printf("\nFAILED IN OPENING THE DEVICE(STREAM OFF)\n");
@@ -882,13 +882,14 @@ int streamOff()
 //CLOSING THE DEVICE
 int closeDevice()
 {
-  pthread_exit(0);
+  running = false;
+  pthread_exit((void*)dequeueThread);
+  pthread_mutex_destroy(&mutex);
   if(streamOff()!=PASS)
   {
     printf("\nSTREAM OFF FAILED");
     return FAIL;
   }
-  pthread_mutex_destroy(&mutex);
   if(fd > 0)
   {
     close(fd);

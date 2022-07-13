@@ -107,9 +107,6 @@ copied to the another buffer(data).
   This buffer(data) is used to write a file in the sampleApplication.cpp
 **************************************************************************************************************************
 */
-int startRender();
-
-
 
 /*
 TO GRAB THE FRAME

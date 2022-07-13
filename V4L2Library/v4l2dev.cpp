@@ -33,16 +33,41 @@ int dequeueIndex=0;
 int fd=-1;
 pthread_t dequeueThread;  //CREATING A THREAD ID
 pthread_mutex_t mutex;
-bool running = true;
+bool runningDequeue = true;
+
 struct v4l2_buffer buf;
 struct v4l2_requestbuffers req;
 struct buffer *buffers = NULL;
 unsigned char *temp_buffer = NULL;
 struct v4l2_capability cam_cap;  //For getting capability of that device
 
+
+int streamOff();
+int xioctl(int fd,int request, void *arg);
+void *render(void* arg);
+int checkForValidNode(const char *dev_path);
+
+
 #define fun m##a##i##n
 int fun()
 {
+}
+//SWITCHING OFF THE STREAM
+int streamOff()
+{
+  //DESTROYING THE MUTEX
+  //pthread_mutex_destroy(&mutex);
+  if(fd < 0)
+  {
+    printf("\nFAILED IN OPENING THE DEVICE(STREAM OFF)\n");
+    return FAIL;
+  }
+  if(xioctl(fd, VIDIOC_STREAMOFF, &buf.type)<0)
+  {
+    printf("STREAM OFF FAILED\n");
+    return FAIL;
+  }
+  return PASS;
 }
 
 //DO IOCTL UNTILL THE RESOURCE IS AVAILABLE(RESOURCE TEMPORARILY UNAVAILABLE)
@@ -248,78 +273,6 @@ int getDeviceInfo(int deviceIndex,char *serialNumber, char *device_Name, char *p
   return PASS;
 }
 
-//OPENING THE DEVICE WITH THE SPECIFIED DEVICE INDEX
-int openDevice(int deviceIndex)
-{
-  const char *product_id, *vendor_id;
-  int count=0;
-  struct udev *udev;
-  struct udev_device *device,*parentdevice;
-  struct udev_enumerate *enumerate;
-  struct udev_list_entry *devices, *dev_list_entry;
-
-  /* creating udev object */
-  udev = udev_new();
-  if (!udev)
-  {
-    printf("\nCANNOT CREATE UDEV CONTEXT\n");
-    return FAIL;
-  }
-
-  /* creating enumerate object */
-  enumerate = udev_enumerate_new(udev);
-  if (!enumerate)
-  {
-    printf("CANNOT CREATE ENUMERATE CONTEXT\n");
-    return FAIL;
-  }
-  udev_enumerate_add_match_subsystem(enumerate, "video4linux");
-  udev_enumerate_scan_devices(enumerate);
-  /* fillup device list */
-  devices = udev_enumerate_get_list_entry(enumerate);
-  if (!devices)
-  {
-    perror("FAILED TO GET DEVICE LIST...\n");
-    return FAIL;
-  }
-  udev_list_entry_foreach(dev_list_entry, devices)
-  {
-    const char *path=NULL,*sNo=NULL;
-
-    path = udev_list_entry_get_name(dev_list_entry);
-    device = udev_device_new_from_syspath(udev, path);
-
-    parentdevice = udev_device_get_parent_with_subsystem_devtype(device,"usb","usb_device");
-    if(!parentdevice)
-    return FAIL;
-
-    const char *dev_path = udev_device_get_devnode(device);
-    sNo = udev_device_get_sysattr_value(parentdevice,"serial");
-    if(sNo==NULL)
-    continue;
-    vendor_id =  udev_device_get_sysattr_value(parentdevice,"idVendor");
-    product_id = udev_device_get_sysattr_value(parentdevice,"idProduct");
-    if(checkForValidNode(dev_path)==PASS)
-    {
-      // refIndex = refIndex | (1 << (int)(dev_path[10]-'0'));
-      count++;
-      if(count==deviceIndex)
-      {
-        fd=open(dev_path,O_RDWR|O_NONBLOCK);
-        if(fd < 0)
-        {
-          printf("\nFAILED IN OPENING THE DEVICE\n");
-          return FAIL;
-        }
-        break;
-      }
-    }
-  }
-  udev_enumerate_unref(enumerate); // free enumerate
-  udev_unref(udev);                // free udev
-  return PASS;
-}
-
 //GETTING THE CURRENT DEVICE FORMAT
 int getCurrentFormat(int *frame_height,int *frame_width,char *pixelFormat)
 {
@@ -493,108 +446,6 @@ int getFormatType(int formatIndex, char *formatType, int *width, int *height, in
   return PASS;
 }
 
-//SETTING THE FORMAT IN THE PARTICULAR INDEX WHICH GOT FROM THE USER
-int setFormat(int setFormatIndex)
-{
-  //  printf("Inside setformat\n");
-  struct v4l2_fmtdesc formatDescriptor;
-  struct v4l2_frmsizeenum frameSize;
-  struct v4l2_frmivalenum frameIntervalValue;
-  struct v4l2_format frmt;
-
-  //INITIALIZING ALL THE VALUES TO 0 IN THE STRUCTURE
-  memset(&formatDescriptor, 0, sizeof(formatDescriptor));
-  memset(&frameSize, 0, sizeof(frameSize));
-  memset(&frameIntervalValue, 0, sizeof(frameIntervalValue));
-
-  char *description;
-  //int *pixelformat;
-  formatDescriptor.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  formatDescriptor.index = 0;
-  int index=0,framePerSecond=0,width,height;
-  int formatIndex=1; //FOR INDEXING THE PIXEL FORMAT FOR THE RESPECTIVE DEVICE
-
-  // ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
-  // ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
-  // ENUMERATING FRAME INTERVAL VALUE FOR THAT PARTICULAR FRAMES
-
-  while(ioctl(fd,VIDIOC_ENUM_FMT,&formatDescriptor) == 0)
-  {
-    //printf("\nindex:%d desc:%s ",formatDescriptor.index,formatDescriptor.description);
-    formatDescriptor.index++;
-    frameSize.pixel_format = formatDescriptor.pixelformat;
-    frameSize.index = 0;
-    while((ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frameSize)) == 0)
-    {
-      if(frameSize.type == V4L2_FRMSIZE_TYPE_DISCRETE)
-      {
-        //printf("frmsize index:%d w:%d  h:%d ",frameSize.index,frameSize.discrete.width,frameSize.discrete.height);
-        frameSize.index++;
-        frameIntervalValue.index = 0;
-        frameIntervalValue.pixel_format = frameSize.pixel_format;
-        frameIntervalValue.width = frameSize.discrete.width;
-        frameIntervalValue.height = frameSize.discrete.height;
-
-        while((ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frameIntervalValue)) == 0)
-        {
-          if(frameIntervalValue.type == V4L2_FRMIVAL_TYPE_DISCRETE)
-          {
-            //printf("frminterval index:%d",frameIntervalValue.index);
-            frameIntervalValue.index++;
-            if(setFormatIndex == formatIndex)
-            {
-              frmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-              frmt.fmt.pix.pixelformat=formatDescriptor.pixelformat;
-              frmt.fmt.pix.width=frameSize.discrete.width;
-              frmt.fmt.pix.height= frameSize.discrete.height;
-              if((ioctl(fd, VIDIOC_S_FMT, &frmt))==0)
-              {
-                printf("\nTHE FORMAT %d IS SET\n",setFormatIndex);
-                struct v4l2_streamparm parm;
-                //Setting the parm type
-                parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                if(ioctl(fd, VIDIOC_G_PARM, &parm)){
-                  printf("Get parameter failed\n");
-                  return FAIL;
-                }
-                //Checking the device for fps set capability
-                if (!(parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
-                {
-                  printf("V4L2_CAP_TIMEPERFRAME not supported\n" );
-                  return FAIL;
-                }
-                //If the device has set(fps) capability...then set the fps
-                parm.parm.capture.timeperframe = frameIntervalValue.discrete;
-                if(ioctl(fd, VIDIOC_S_PARM, &parm)){
-                  printf("SET FPS FAILED\n");
-                  return FAIL;
-                }
-                return PASS;
-              }
-              else
-              {
-                printf("SET FORMAT IS FAILED \n");
-              }
-            }
-            formatIndex++;
-          }
-          else
-          {
-            printf("\nFRAME INTERVAL VALUE IS NOT V4L2_FRMIVAL_TYPE_DISCRETE TYPE\n ");
-            return FAIL;
-          }
-        }
-      }
-      else
-      {
-        printf("\nFRAME SIZE IS NOT V4L2_FRMSIZE_TYPE_DISCRETE TYPE\n");
-        return FAIL;
-      }
-    }
-  }
-  return PASS;
-}
-
 /*
 Now after setting the format to the device, the next process is
 to render the device and grab or capture the frame.
@@ -663,7 +514,8 @@ int requestBuffer()
 
   /*REQUEST COUNT LESS THAN MINIMUM VALUE THE BUFFER SIZE MUST NOT BE
   LESS THAN TWO AS WE CANNOT ABLE TO STREAM */
-  if (req.count < 2)                                                   {
+  if (req.count < 2)
+  {
     printf("INSUFFICIENT BUFFER COUNT\n");
     return FAIL;
   }
@@ -712,6 +564,33 @@ int querryBuffer()
   }
   return PASS;
 }
+
+//UNMAPPING WHICH WAS MAPPED BEFORE
+int unmap()
+{
+    for (int index = 0; index < req.count;index++)
+    {
+        //UNMAPPING THE DATA ACQUIRED FROM MMAP
+        if(munmap(buffers[index].start, buffers[index].length)<0)
+        {
+            printf("MEMORY UNMAPPING FAILED\n");
+            return FAIL;
+        }
+    }
+    //Memory releasing
+    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.count = 0;
+    req.memory =V4L2_MEMORY_MMAP;
+    
+    //RELEASING MEMORY BY REQUESTING BUFFER WITH COUNT 0
+    if(ioctl(fd, VIDIOC_REQBUFS, &req)<0)
+    {
+        printf("MEMORY RELEASE FAILED\n");
+        return FAIL;
+    }
+    return PASS;
+}
+
 
 //4.QUEUE BUFFER
 int queueBuffer()
@@ -768,15 +647,16 @@ int dequeueBuffer()
 
   //VALIDATING DEQUEUE BUFFER
   ioctlReturn = xioctl(fd,VIDIOC_DQBUF,&buf);
+
   if(fd<0)
   {
     printf("\nERROR IN OPENING FILE\n");
   }
-
+  //printf("\ndequeuing..........\n");
   if(ioctlReturn < 0)
   {
-    printf("SOMETHING WENT WRONG:%s\n", strerror(errno));
     printf("DEQUEUE FAILED!\n");
+    printf("SOMETHING WRONG:%s\n", strerror(errno));
     return FAIL;
   }
 
@@ -798,24 +678,22 @@ int dequeueBuffer()
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
 void *render(void* arg)
 {
-    while(running)
+  while(runningDequeue)
+  {
+    if(dequeueBuffer()!=PASS)
     {
-      if(dequeueBuffer()!=PASS)
-      {
-        printf("\nDEQUEUE BUFFER FAILED\n");
-        return (void*)FAIL;
-      }
+      printf("\nDEQUEUE BUFFER FAILED\n");
+      return (void*)FAIL;
     }
+  }
+  pthread_exit(NULL);
+  //pthread_cancel(dequeueThread);
+  pthread_mutex_destroy(&mutex);
 }
 
 //API TO START RENDERING
 int startRender()
 {
-  if(queryCap()!=PASS)
-  {
-    printf("\nQUERY CAPABILITY FAILED\n");
-    return FAIL;
-  }
   if(requestBuffer()!=PASS)
   {
     printf("\nREQUEST BUFFER FAILED\n");
@@ -836,7 +714,9 @@ int startRender()
     printf("\nSTREAM ON FAILED");
     return FAIL;
   }
+
   pthread_create(&dequeueThread,NULL,render,NULL);
+
   return PASS;
 }
 
@@ -861,19 +741,217 @@ unsigned char *grabFrame(int *bytesused)
   return data;
 }
 
-//SWITCHING OFF THE STREAM
-int streamOff()
+//OPENING THE DEVICE WITH THE SPECIFIED DEVICE INDEX
+int openDevice(int deviceIndex)
 {
-  //DESTROYING THE MUTEX
-  pthread_mutex_destroy(&mutex);
-  if(fd < 0)
+  const char *product_id, *vendor_id;
+  int count=0;
+  struct udev *udev;
+  struct udev_device *device,*parentdevice;
+  struct udev_enumerate *enumerate;
+  struct udev_list_entry *devices, *dev_list_entry;
+
+  /* creating udev object */
+  udev = udev_new();
+  if (!udev)
   {
-    printf("\nFAILED IN OPENING THE DEVICE(STREAM OFF)\n");
+    printf("\nCANNOT CREATE UDEV CONTEXT\n");
     return FAIL;
   }
-  if(xioctl(fd, VIDIOC_STREAMOFF, &buf.type)<0)
+
+  /* creating enumerate object */
+  enumerate = udev_enumerate_new(udev);
+  if (!enumerate)
   {
-    printf("STREAM OFF FAILED\n");
+    printf("CANNOT CREATE ENUMERATE CONTEXT\n");
+    return FAIL;
+  }
+  udev_enumerate_add_match_subsystem(enumerate, "video4linux");
+  udev_enumerate_scan_devices(enumerate);
+  /* fillup device list */
+  devices = udev_enumerate_get_list_entry(enumerate);
+  if (!devices)
+  {
+    perror("FAILED TO GET DEVICE LIST...\n");
+    return FAIL;
+  }
+  udev_list_entry_foreach(dev_list_entry, devices)
+  {
+    const char *path=NULL,*sNo=NULL;
+
+    path = udev_list_entry_get_name(dev_list_entry);
+    device = udev_device_new_from_syspath(udev, path);
+
+    parentdevice = udev_device_get_parent_with_subsystem_devtype(device,"usb","usb_device");
+    if(!parentdevice)
+    return FAIL;
+
+    const char *dev_path = udev_device_get_devnode(device);
+    sNo = udev_device_get_sysattr_value(parentdevice,"serial");
+    if(sNo==NULL)
+    continue;
+    vendor_id =  udev_device_get_sysattr_value(parentdevice,"idVendor");
+    product_id = udev_device_get_sysattr_value(parentdevice,"idProduct");
+    if(checkForValidNode(dev_path)==PASS)
+    {
+      // refIndex = refIndex | (1 << (int)(dev_path[10]-'0'));
+      count++;
+      if(count==deviceIndex)
+      {
+        fd=open(dev_path,O_RDWR|O_NONBLOCK);
+        if(fd < 0)
+        {
+          printf("\nFAILED IN OPENING THE DEVICE\n");
+          return FAIL;
+        }
+        break;
+      }
+    }
+  }
+  udev_enumerate_unref(enumerate); // free enumerate
+  udev_unref(udev);                // free udev
+
+  if(queryCap()!=PASS)
+  {
+    printf("\nQUERY CAPABILITY FAILED\n");
+    return FAIL;
+  }
+
+  if(startRender()!=PASS)
+  {
+    printf("\nDEVICE FAILS TO RENDER\n");
+    return FAIL;
+  }
+  return PASS;
+}
+
+
+//SETTING THE FORMAT IN THE PARTICULAR INDEX WHICH GOT FROM THE USER
+int setFormat(int setFormatIndex)
+{
+  runningDequeue = false;
+  //printf("start setformat\n");
+  //pthread_exit(&dequeueThread);
+  //printf("after set false...............\n");
+  // pthread_cancel(dequeueThread);
+  // pthread_mutex_destroy(&mutex);
+  //printf("after mutex\n");
+  if(streamOff()!=PASS)
+  {
+    printf("\nSTREAM OFF FAILED");
+    return FAIL;
+  }
+  //  printf("after stream off\n");
+  if(unmap()!=PASS)
+  {
+    printf("\nUNMAPPING IS FAILED");
+    return FAIL;
+  }
+  //printf("after unmap\n");
+  struct v4l2_fmtdesc formatDescriptor;
+  struct v4l2_frmsizeenum frameSize;
+  struct v4l2_frmivalenum frameIntervalValue;
+  struct v4l2_format frmt;
+
+  //INITIALIZING ALL THE VALUES TO 0 IN THE STRUCTURE
+  memset(&formatDescriptor, 0, sizeof(formatDescriptor));
+  memset(&frameSize, 0, sizeof(frameSize));
+  memset(&frameIntervalValue, 0, sizeof(frameIntervalValue));
+
+  char *description;
+  //int *pixelformat;
+  formatDescriptor.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  formatDescriptor.index = 0;
+  int index=0,framePerSecond=0,width,height;
+  int formatIndex=1; //FOR INDEXING THE PIXEL FORMAT FOR THE RESPECTIVE DEVICE
+
+  // ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
+  // ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
+  // ENUMERATING FRAME INTERVAL VALUE FOR THAT PARTICULAR FRAMES
+
+  while(ioctl(fd,VIDIOC_ENUM_FMT,&formatDescriptor) == 0)
+  {
+    //printf("\nindex:%d desc:%s ",formatDescriptor.index,formatDescriptor.description);
+    formatDescriptor.index++;
+    frameSize.pixel_format = formatDescriptor.pixelformat;
+    frameSize.index = 0;
+    while((ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frameSize)) == 0)
+    {
+      if(frameSize.type == V4L2_FRMSIZE_TYPE_DISCRETE)
+      {
+        //printf("frmsize index:%d w:%d  h:%d ",frameSize.index,frameSize.discrete.width,frameSize.discrete.height);
+        frameSize.index++;
+        frameIntervalValue.index = 0;
+        frameIntervalValue.pixel_format = frameSize.pixel_format;
+        frameIntervalValue.width = frameSize.discrete.width;
+        frameIntervalValue.height = frameSize.discrete.height;
+
+        while((ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frameIntervalValue)) == 0)
+        {
+          if(frameIntervalValue.type == V4L2_FRMIVAL_TYPE_DISCRETE)
+          {
+            //printf("frminterval index:%d",frameIntervalValue.index);
+            frameIntervalValue.index++;
+            //printf("\nSET FORMAT INDEX:%d\n",formatIndex);
+            if(setFormatIndex == formatIndex)
+            {
+              frmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+              frmt.fmt.pix.pixelformat=formatDescriptor.pixelformat;
+              frmt.fmt.pix.width=frameSize.discrete.width;
+              frmt.fmt.pix.height= frameSize.discrete.height;
+            //  printf("\ninside validation..............................\n");
+
+              if((ioctl(fd, VIDIOC_S_FMT, &frmt))==0)
+              {
+                printf("\nTHE FORMAT %d IS SET\n",setFormatIndex);
+                struct v4l2_streamparm parm;
+                //Setting the parm type
+                parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                if(ioctl(fd, VIDIOC_G_PARM, &parm)){
+                  printf("Get parameter failed\n");
+                  return FAIL;
+                }
+                //Checking the device for fps set capability
+                if (!(parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
+                {
+                  printf("V4L2_CAP_TIMEPERFRAME not supported\n" );
+                  return FAIL;
+                }
+
+                //If the device has set(fps) capability...then set the fps
+                parm.parm.capture.timeperframe = frameIntervalValue.discrete;
+                if(ioctl(fd, VIDIOC_S_PARM, &parm)){
+                  printf("SET FPS FAILED\n");
+                  return FAIL;
+                }
+                return PASS;
+              }
+              else
+              {
+                printf("SET FORMAT IS FAILED \n");
+              }
+            }
+            formatIndex++;
+          }
+          else
+          {
+            printf("\nFRAME INTERVAL VALUE IS NOT V4L2_FRMIVAL_TYPE_DISCRETE TYPE\n ");
+            return FAIL;
+          }
+        }
+      }
+      else
+      {
+        printf("\nFRAME SIZE IS NOT V4L2_FRMSIZE_TYPE_DISCRETE TYPE\n");
+        return FAIL;
+      }
+    }
+  }
+
+  //START RENDERING AFTER THE FORMAT IS SET
+  if(startRender()!=PASS)
+  {
+    printf("\nDEVICE FAILS TO RENDER\n");
     return FAIL;
   }
   return PASS;
@@ -882,7 +960,7 @@ int streamOff()
 //CLOSING THE DEVICE
 int closeDevice()
 {
-  running = false;
+  runningDequeue = false;
   pthread_exit((void*)dequeueThread);
   pthread_mutex_destroy(&mutex);
   if(streamOff()!=PASS)

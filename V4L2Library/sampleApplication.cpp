@@ -22,9 +22,9 @@ int bytesused=0;  //USED TO STORE THE BYTES USED IN QUEUE
 unsigned char *buffer=NULL;
 
 /*
-  THIS IS THE FUNCTION WHICH IS LOCKED BY MUTEX LOCKING MECHANISM
-  AND IS CALLED INFINITELY IN STARTSTREAM FUNCTION WHICH RUNS ON
-  SEPERATE THREAD
+THIS IS THE FUNCTION WHICH IS LOCKED BY MUTEX LOCKING MECHANISM
+AND IS CALLED INFINITELY IN STARTSTREAM FUNCTION WHICH RUNS ON
+SEPERATE THREAD
 */
 int streaming()
 {
@@ -59,28 +59,33 @@ int streaming()
 
   //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
   cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
-
+  cv::namedWindow("STREAMING1", cv::WINDOW_AUTOSIZE);
   //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
-  cv::imshow("STREAMING",rgbFrame);
+  cv::imshow("STREAMING1",rgbFrame);
 
   //SETTING THE WINDOW TO VISIBLE FOR RESPECTIVE FRAMES PER SECONDS
   cv::waitKey(MILLISECONDS/fps);
 
   pthread_mutex_unlock(&streamingMutex);
-  return PASS;
+  if(running!=false)
+  {
+    return PASS;
+  }
 }
 
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
 void *startStream(void* arg)
 {
-    while(running)
+  while(running)
+  {
+    if(streaming()!=PASS)
     {
-      if(streaming()!=PASS)
-      {
-        printf("\nDEQUEUE BUFFER FAILED\n");
-        return (void*)FAIL;
-      }
+      printf("\nFAILED TO STREAM\n");
+      return (void*)FAIL;
     }
+  }
+  pthread_exit(NULL);
+  pthread_mutex_destroy(&streamingMutex);
 }
 
 int main()
@@ -93,7 +98,7 @@ int main()
   char pixelFormat[MAX_CHAR]; //REQUIRED DECLARATIONS FOR GET DEVICE FORMAT
   int frame_height,frame_width;
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
-  int formats=0,exit=1;
+  int formats=0,exit=1,exit1;
   int fwrite_validation;
 
   //TO GET NUMBER OF DEVICES CONNECTED
@@ -141,7 +146,10 @@ int main()
     retVal = openDevice(indexFromUser);
 
     if(retVal<=0)
-    printf("ERROR IN OPENING THE DEVICE...");
+    {
+      printf("ERROR IN OPENING THE DEVICE...");
+      return FAIL;
+    }
     else
     {
       printf("\n-------------------------------------DEVICE %d CURRENT FORMAT-------------------------------------------",indexFromUser);
@@ -153,9 +161,15 @@ int main()
     printf("WIDTH        :%d\n",frame_width);
     printf("PIXEL FORMAT :%s\n",pixelFormat);
 
+    currentFrameHeight=frame_height;
+    currentFrameWidth=frame_width;
+
+    sleep(3);
+    pthread_create(&streamingThread,NULL,startStream,NULL);
+
     //API TO COUNT THE NUMBER OF FORMATS SUPPORTED BY THE DEVICE
     getFormats(&formats);
-    printf("\nTotal Formats:%d\n",formats);
+    printf("\nTOTAL FORMATS SUPPORTED BY THE DEVICE :%d\n",formats);
 
     printf("\n---------------------------PIXEL FORMATS AVAILABLE IN THE DEVICE---------------------------------------");
 
@@ -168,13 +182,30 @@ int main()
       printf("-------------------------------------------------------------------------------------------------------");
     }
 
-    //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
-    printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT:");
-    scanf("%d",&formatIndexFromUser);
-
-    if(formatIndexFromUser <= formats && formatIndexFromUser != 0)
+    printf("\nPRESS 1 IF YOU WANT TO SET THE FORMAT:");
+    scanf("%d",&exit1);
+    if(exit1==1)
     {
-      setFormat(formatIndexFromUser);
+      running = false;
+      //pthread_exit((void*)streamingThread);
+      pthread_cancel(streamingThread);
+      pthread_mutex_destroy(&streamingMutex);
+      //cv::destroyAllWindows();
+      cv::destroyWindow("STREAMING1");
+      //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
+      printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT: ");
+      scanf("%d",&formatIndexFromUser);
+      //printf("\nhere\n");
+      if(formatIndexFromUser <= formats && formatIndexFromUser != 0)
+      {
+        //printf("\nhere1\n");
+        setFormat(formatIndexFromUser);
+      }
+    }
+    else
+    {
+      printf("\nDEVICE RUNS ON DEFAULT FORMAT\n");
+      return PASS;
     }
 
     //GETTING THE CURRENT FORMAT OF THE DEVICE AFTER THE FORMAT HAS BEEN SET BY getFormatType API
@@ -185,21 +216,18 @@ int main()
     printf("PIXEL FORMAT :%s\n",currentPixelFormat);
 
     //API TO START THE RENDERING AND TO CREATE THE THREAD OPERATION
-    startRender();
+    //startRender();
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
-    sleep(2);
-    pthread_create(&streamingThread,NULL,startStream,NULL);
+    // sleep(2);
+    // pthread_create(&streamingThread,NULL,startStream,NULL);
     printf("\nPRESS 0 TO STOP STREAMING\n");
     scanf("%d",&exit);
     if(exit==0)
     {
       running = false;
-      pthread_exit((void*)streamingThread);
-      pthread_mutex_destroy(&streamingMutex);
-
       //CLOSING THE DEVICE
-      closeDevice();
+      //closeDevice();
     }
   }
   else

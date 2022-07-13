@@ -15,6 +15,8 @@
 pthread_t streamingThread;
 pthread_mutex_t streamingMutex;
 bool running = true;
+bool running2 = true;
+
 int fps;
 int currentFrameHeight,currentFrameWidth;
 char currentPixelFormat[MAX_CHAR];
@@ -33,6 +35,7 @@ int streaming()
 
   //CREATING MAT OBJECT
   cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+
 
   //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
   //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
@@ -59,23 +62,22 @@ int streaming()
 
   //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
   cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
+
   cv::namedWindow("STREAMING1", cv::WINDOW_AUTOSIZE);
   //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
   cv::imshow("STREAMING1",rgbFrame);
 
   //SETTING THE WINDOW TO VISIBLE FOR RESPECTIVE FRAMES PER SECONDS
   cv::waitKey(MILLISECONDS/fps);
-
+  //printf("Start Streaming....\n");
   pthread_mutex_unlock(&streamingMutex);
-  if(running!=false)
-  {
-    return PASS;
-  }
+  return PASS;
 }
 
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
 void *startStream(void* arg)
 {
+  printf("\nStart Streaming....\n");
   while(running)
   {
     if(streaming()!=PASS)
@@ -84,13 +86,92 @@ void *startStream(void* arg)
       return (void*)FAIL;
     }
   }
-  pthread_exit(NULL);
-  pthread_mutex_destroy(&streamingMutex);
+}
+
+int streaming2()
+{
+  int fwrite_validation;
+  FILE *fptr= NULL;
+  pthread_mutex_init(&streamingMutex,NULL);
+  pthread_mutex_lock(&streamingMutex);
+
+  //CREATING MAT OBJECT
+  cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+
+  //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
+  //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
+  buffer=grabFrame(&bytesused);
+
+  if(currentFrameWidth==1280 && currentFrameHeight==720)
+  {
+    //OPENING THE FILE WITH APPEND BINARY MODE
+    fptr = fopen("/home/sushanth/Git/e-con-training/V4L2Library/frame.raw","wb");
+    if(fptr==NULL)
+    {
+      printf("\nERROR IN OPENING FILE\n");
+    }
+
+    //WRITING THE BUFFER INTO THE FILE FRAME.RAW
+    fwrite_validation=fwrite(buffer,bytesused,1,fptr);
+
+    //FWRITE VALIDATION
+    if(fwrite_validation != PASS)
+    {
+      printf("\nERROR IN WRITING THE FILE...\n");
+      fclose(fptr);
+      return FAIL;
+    }
+    fclose(fptr);
+  }
+
+  //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
+  if(buffer==NULL)
+  {
+    printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+  }
+
+  //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
+  memcpy(grabbedImage.data,buffer,bytesused);
+
+  //FREE THE BUFFER MEMORY EVERYTIME THE MEMCPY IS OVER
+  if(buffer!=NULL)
+  {
+    free(buffer);
+    buffer=NULL;
+  }
+
+  //CREATING ANOTHER MAT OBJECT
+  cv::Mat rgbFrame;
+
+  //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
+  cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
+  cv::namedWindow("STREAMING2 FRAME", cv::WINDOW_AUTOSIZE);
+  //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
+  cv::imshow("STREAMING2 FRAME",rgbFrame);
+
+  //SETTING THE WINDOW TO VISIBLE FOR RESPECTIVE FRAMES PER SECONDS
+  cv::waitKey(MILLISECONDS/fps);
+  //printf("Start Streaming....\n");
+  pthread_mutex_unlock(&streamingMutex);
+  return PASS;
+}
+
+//THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
+void *startStream2(void* arg)
+{
+  printf("Start Streaming2....\n");
+  while(running2)
+  {
+    if(streaming2()!=PASS)
+    {
+      printf("\nFAILED TO STREAM2\n");
+      return (void*)FAIL;
+    }
+  }
 }
 
 int main()
 {
-  FILE *fptr= NULL;
   int count=0,indexFromUser,retVal=0;
   char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
   char productId[MAX_CHAR], vendorId[MAX_CHAR];
@@ -99,7 +180,6 @@ int main()
   int frame_height,frame_width;
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
   int formats=0,exit=1,exit1;
-  int fwrite_validation;
 
   //TO GET NUMBER OF DEVICES CONNECTED
   getDeviceCount(&count);
@@ -187,6 +267,8 @@ int main()
     if(exit1==1)
     {
       running = false;
+      pthread_join(streamingThread,NULL);
+      //sleep(5);
       //pthread_exit((void*)streamingThread);
       pthread_cancel(streamingThread);
       pthread_mutex_destroy(&streamingMutex);
@@ -219,15 +301,16 @@ int main()
     //startRender();
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
-    // sleep(2);
-    // pthread_create(&streamingThread,NULL,startStream,NULL);
+    sleep(2);
+    pthread_create(&streamingThread,NULL,startStream2,NULL);
+    sleep(2);
     printf("\nPRESS 0 TO STOP STREAMING\n");
     scanf("%d",&exit);
     if(exit==0)
     {
       running = false;
       //CLOSING THE DEVICE
-      //closeDevice();
+      closeDevice();
     }
   }
   else

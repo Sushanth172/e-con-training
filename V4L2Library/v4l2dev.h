@@ -41,8 +41,32 @@ deviceIndex -> It is read from the sampleApplication and passed as a reference t
 int openDevice(int deviceIndex);
 
 
+
+/*
+TO GET THE UVC CONTROLS FROM THE DEVICE
+**************************************************************************************************************************
+OUTPUT PARAMETERS
+minimum       ->Minimum value for the particular controls
+maximum       ->Minimum value for the particular controls
+steppingDelta ->stepping value
+currentValue  ->Current value for the device
+default Value ->default value of particular controls for the device
+**************************************************************************************************************************
+*/
 int getUVCControls(int *minimum, int *maximum, int *steppingDelta, int *currentValue, int *defaultValue);
+
+
+
+/*
+TO SET THE UVC CONTROL BY GETTING THE VALUE FROM APPLICATION
+**************************************************************************************************************************
+INPUT PARAMETER
+value -> Value from the application to set the UVC conrols
+**************************************************************************************************************************
+*/
 int setUVCControls(int value);
+
+
 
 /*
 TO GET THE CURRENT FORMAT OF THE DEVICE OPENED
@@ -65,6 +89,7 @@ formats -> gets the number of formats supported by the device
 **************************************************************************************************************************
 */
 int getFormats(int *formats);
+
 
 
 

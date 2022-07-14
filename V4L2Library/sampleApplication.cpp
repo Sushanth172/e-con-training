@@ -93,6 +93,11 @@ int main()
   int width,height; //REQUIRED DECLARATIONS FOR ENUM FORMAT
   int formats=0,exit=1,exit1;
 
+  //DECLARATIONS FOR UVC SETTINGS
+  int setBrightnessValue;
+  int minimum,maximum,steppingDelta,currentValue,defaultValue;
+  int option;
+
   //TO GET NUMBER OF DEVICES CONNECTED
   getDeviceCount(&count);
 
@@ -179,7 +184,7 @@ int main()
       printf("-------------------------------------------------------------------------------------------------------");
     }
 
-    printf("\nPRESS 1 IF YOU WANT TO SET THE FORMAT: ");
+    printf("\nPRESS 1 IF YOU WANT TO ALTER DEVICE SETTINGS ");
     scanf("%d",&exit1);
 
     if(exit1==1)
@@ -190,12 +195,63 @@ int main()
       pthread_mutex_destroy(&streamingMutex);
       cv::destroyWindow("STREAMING1");
 
-      //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
-      printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT: ");
-      scanf("%d",&formatIndexFromUser);
-      if(formatIndexFromUser <= formats && formatIndexFromUser != 0)
+      printf("\nCHOOSE 1 TO CHANGE THE FORMAT OF THE DEVICE\n");
+      printf("\nCHOOSE 2 TO SET BRIGHTNESS OF THE DEVICE\n");
+
+      printf("\nENTER YOUR OPTION: \n");
+      scanf("%d",&option);
+      switch(option)
       {
-        setFormat(formatIndexFromUser);
+        case 1:
+          //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
+          printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT: ");
+          scanf("%d",&formatIndexFromUser);
+          if(formatIndexFromUser <= formats && formatIndexFromUser != 0)
+          {
+            setFormat(formatIndexFromUser);
+          }
+          break;
+        case 2:
+
+          /*
+             V4L2_CID_CONTRAST
+             V4L2_CID_SATURATION
+             V4L2_CID_HUE
+             V4L2_CID_GAIN
+             V4L2_CID_EXPOSURE_AUTO
+             V4L2_CID_EXPOSURE_ABSOLUTE
+             V4L2_CID_FOCUS_AUTO
+             V4L2_CID_FOCUS_ABSOLUTE
+             V4L2_CID_SHARPNESS
+             V4L2_CID_GAMMA
+             V4L2_CID_WHITE_BALANCE_TEMPERATURE
+             V4L2_CID_BACKLIGHT_COMPENSATION
+             V4L2_CID_ZOOM_ABSOLUTE
+             V4L2_CID_PAN_ABSOLUTE
+             V4L2_CID_TILT_ABSOLUTE
+             V4L2_CID_AUTO_WHITE_BALANCE
+          */
+          if(getUVCControls(&minimum, &maximum, &steppingDelta, &currentValue, &defaultValue)!=PASS)
+          {
+            printf("\nGET BRIGHTNESS FAILED\n");
+            return FAIL;
+          }
+          printf("\nMIN      :%d\n",minimum);
+          printf("MAX      :%d\n",maximum);
+          printf("STEP     :%d\n",steppingDelta);
+          printf("CURRENT  :%d\n",currentValue);
+          printf("DEFAULT  :%d\n",defaultValue);
+
+          printf("\nENTER THE VALUE TO SET BRIGHTNESS:");
+          scanf("%d",&setBrightnessValue);
+          if(setUVCControls(setBrightnessValue)!=PASS)
+          {
+            printf("\nSET BRIGHTNESS FAILED\n");
+            return FAIL;
+          }
+          break;
+        default:
+          printf("\nDEVICE STREAMS WITHOUT ANY CHANGES\n");
       }
     }
     else
@@ -225,15 +281,15 @@ int main()
     }
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
-   sleep(3);
+    sleep(3);
 
     /*
-       RUNNING IS FALSE WHEN SETTING THE FORMAT FOR THE DEVICE
-       IN ORDER TO STREAM AGAIN AFTER THE FORMAT SET...RUNNING=TRUE
+    RUNNING IS FALSE WHEN SETTING THE FORMAT FOR THE DEVICE
+    IN ORDER TO STREAM AGAIN AFTER THE FORMAT SET...RUNNING=TRUE
     */
     running=true;
     pthread_create(&streamingThread,NULL,startStream,NULL);
-    
+
     printf("\nPRESS 0 TO STOP STREAMING\n");
     scanf("%d",&exit);
 

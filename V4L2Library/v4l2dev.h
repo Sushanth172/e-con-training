@@ -41,6 +41,8 @@ deviceIndex -> It is read from the sampleApplication and passed as a reference t
 int openDevice(int deviceIndex);
 
 
+int getUVCControls(int *minimum, int *maximum, int *steppingDelta, int *currentValue, int *defaultValue);
+int setUVCControls(int value);
 
 /*
 TO GET THE CURRENT FORMAT OF THE DEVICE OPENED
@@ -93,20 +95,6 @@ From the specified index, the respective format is set to the device
 */
 int setFormat(int setFormatIndex);
 
-
-
-/*
-DEVICE RENDERING PROCESS
-**************************************************************************************************************************
-  querycap(),requestBuffer(),querryBuffer(),queueBuffer() are called in this API
-Following this a thread is created in order to run dequeueBuffer() to make it
-rendering infinitely.
-  When the grabFrame() is called, at that particular time of allocated buffers
-i.e temp_buffer in the dequeueBuffer() is passed into the memcpy and it is
-copied to the another buffer(data).
-  This buffer(data) is used to write a file in the sampleApplication.cpp
-**************************************************************************************************************************
-*/
 
 /*
 TO GRAB THE FRAME

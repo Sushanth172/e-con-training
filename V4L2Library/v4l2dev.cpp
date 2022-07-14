@@ -25,9 +25,6 @@ struct buffer{
   size_t  length;
 };
 
-FILE *fptr;
-int fwrite_validation;
-
 int bytesUsed=0;
 int refIndex=0;
 int dequeueIndex=0;
@@ -38,6 +35,8 @@ bool runningDequeue = true;
 
 struct v4l2_buffer buf;
 struct v4l2_requestbuffers req;
+struct v4l2_queryctrl queryctrl;
+struct v4l2_control queryctrl1;
 struct buffer *buffers = NULL;
 unsigned char *temp_buffer = NULL;
 struct v4l2_capability cam_cap;  //For getting capability of that device
@@ -53,6 +52,52 @@ int checkForValidNode(const char *dev_path);
 int fun()
 {
 }
+
+int getUVCControls(int *minimum, int *maximum, int *steppingDelta, int *currentValue, int *defaultValue)
+{
+  /* Query for brightness support*/
+     queryctrl.id = V4L2_CID_BRIGHTNESS;
+
+     if (ioctl(fd, VIDIOC_QUERYCTRL, &queryctrl) < 0)
+     {
+         printf("\nQUERY CONTROL FAILED\n");
+         return FAIL;
+     }
+     //CHECKING FOR THE FLAG IS SET OR NOT
+     if(queryctrl.flags & V4L2_CTRL_FLAG_DISABLED)
+     {
+         printf("V4L2_CID_BRIGHTNESS IS NOT SUPPORTED");
+         return FAIL;
+     }
+     
+     //THIS STRUCTURE(VIDIOC_G_CTRL)CONTAINS ONLY ID & VALUE TO ALTER CONTROLS
+     if(ioctl(fd, VIDIOC_G_CTRL,&queryctrl1)<0)
+     {
+       *currentValue=queryctrl1.value;
+     }
+
+     *minimum       = queryctrl.minimum;
+     *maximum       = queryctrl.maximum;
+     *steppingDelta = queryctrl.step;
+     *defaultValue  = queryctrl.default_value;
+     return PASS;
+}
+
+int setUVCControls(int value)
+{
+
+  queryctrl1.id = V4L2_CID_BRIGHTNESS;
+  queryctrl1.value = value;
+
+  //CHECKING IF SET CONTROL IS SUCCESSFUL
+  if (ioctl(fd, VIDIOC_S_CTRL, &queryctrl1)<0)
+  {
+    printf("\nSET BRIGHTNESS FAILED\n");                              //checking if set control is successful
+  }
+  return PASS;
+}
+
+
 
 //SWITCHING OFF THE STREAM
 int streamOff()
@@ -171,9 +216,9 @@ int getDeviceCount(int *numberOfDevices)
 
     /*
     CHECKING FOR VALID NODE
-      Finding the index of the node from the 11th position of device path
-      and left shift it with 1,
-      doing OR operation with refIndex() and assign it to refIndex
+    Finding the index of the node from the 11th position of device path
+    and left shift it with 1,
+    doing OR operation with refIndex() and assign it to refIndex
     */
     if(checkForValidNode(dev_path)==PASS)
     {
@@ -248,9 +293,9 @@ int getDeviceInfo(int deviceIndex,char *serialNumber, char *device_Name, char *p
 
     /*
     CHECKING FOR VALID NODE
-      Finding the index of the node from the 11th position of device path
-      and left shift it with 1,
-      doing OR operation with refIndex() and assign it to refIndex
+    Finding the index of the node from the 11th position of device path
+    and left shift it with 1,
+    doing OR operation with refIndex() and assign it to refIndex
     */
     if(checkForValidNode(dev_path)==PASS)
     {
@@ -563,27 +608,27 @@ int querryBuffer()
 //UNMAPPING THE MEMORY WHICH WAS MAPPED BEFORE
 int unmap()
 {
-    for (int index = 0; index < req.count;index++)
+  for (int index = 0; index < req.count;index++)
+  {
+    //UNMAPPING THE DATA ACQUIRED FROM MMAP
+    if(munmap(buffers[index].start, buffers[index].length)<0)
     {
-        //UNMAPPING THE DATA ACQUIRED FROM MMAP
-        if(munmap(buffers[index].start, buffers[index].length)<0)
-        {
-            printf("MEMORY UNMAPPING FAILED\n");
-            return FAIL;
-        }
+      printf("MEMORY UNMAPPING FAILED\n");
+      return FAIL;
     }
-    //RELEASING THE MEMORY
-    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    req.count = 0;
-    req.memory =V4L2_MEMORY_MMAP;
+  }
+  //RELEASING THE MEMORY
+  req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  req.count = 0;
+  req.memory =V4L2_MEMORY_MMAP;
 
-    //RELEASING MEMORY BY REQUESTING BUFFER WITH COUNT 0
-    if(ioctl(fd, VIDIOC_REQBUFS, &req)<0)
-    {
-        printf("MEMORY RELEASE FAILED\n");
-        return FAIL;
-    }
-    return PASS;
+  //RELEASING MEMORY BY REQUESTING BUFFER WITH COUNT 0
+  if(ioctl(fd, VIDIOC_REQBUFS, &req)<0)
+  {
+    printf("MEMORY RELEASE FAILED\n");
+    return FAIL;
+  }
+  return PASS;
 }
 
 
@@ -619,6 +664,7 @@ int streamOn()
     printf("\nFAILED IN OPENING THE DEVICE(STREAM ON)\n");
     return FAIL;
   }
+
   //STREAMING ON THE DEVICE
   if(xioctl(fd,VIDIOC_STREAMON,&buf.type)<0)
   {
@@ -685,7 +731,19 @@ void *render(void* arg)
   pthread_mutex_destroy(&mutex);
 }
 
-//API TO START RENDERING
+
+
+/*
+DEVICE RENDERING PROCESS
+**************************************************************************************************************************
+querycap(),requestBuffer(),querryBuffer(),queueBuffer() are called in this API
+Following this a thread is created in order to run dequeueBuffer() to make it
+rendering infinitely.
+When the grabFrame() is called, at that particular time of allocated buffers
+i.e temp_buffer in the dequeueBuffer() is passed into the memcpy and it is
+copied to the another buffer(data).
+**************************************************************************************************************************
+*/
 int startRender()
 {
   if(requestBuffer()!=PASS)
@@ -853,9 +911,9 @@ int setFormat(int setFormatIndex)
   int formatIndex=1; //FOR INDEXING THE PIXEL FORMAT FOR THE RESPECTIVE DEVICE
 
   /*
-    ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
-    ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
-    ENUMERATING FRAME INTERVAL VALUE FOR THAT PARTICULAR FRAMES
+  ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
+  ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
+  ENUMERATING FRAME INTERVAL VALUE FOR THAT PARTICULAR FRAMES
   */
 
   while(ioctl(fd,VIDIOC_ENUM_FMT,&formatDescriptor) == 0)

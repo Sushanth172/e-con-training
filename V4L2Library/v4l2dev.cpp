@@ -12,6 +12,7 @@
 #include <linux/uvcvideo.h>
 #include <fcntl.h>
 #include <string.h>
+#include <iostream>
 #include <pthread.h>
 #define PASS 1
 #define FAIL -1
@@ -52,6 +53,7 @@ int checkForValidNode(const char *dev_path);
 int fun()
 {
 }
+
 //SWITCHING OFF THE STREAM
 int streamOff()
 {
@@ -74,7 +76,7 @@ int xioctl(int fd,int request, void *arg)
   int resouceAvailableIndex,ioctlReturn;
   do {
     resouceAvailableIndex = ioctl(fd, request, arg);
-  } while (resouceAvailableIndex == -1 && EAGAIN == errno);  //do ioctl until there is no EAGAIN error(resource temporarily unavailable, try again)
+  } while (resouceAvailableIndex == -1 && EAGAIN == errno);
   return resouceAvailableIndex;
 }
 
@@ -88,7 +90,7 @@ int checkForValidNode(const char *dev_path)
     return FAIL;
   }
 
-  //Check if the device is capable of streaming
+  //CHECKING IF THE DEVICE IS CAPABLE OF STREAMING
   if(ioctl(cam_fd, VIDIOC_QUERYCAP, &cam_cap) < 0)
   {
     printf("VIDIOC_QUERYCAP failure");
@@ -169,9 +171,9 @@ int getDeviceCount(int *numberOfDevices)
 
     /*
     CHECKING FOR VALID NODE
-    Finding the index of the node from the 11th position of device path
-    and left shift it with 1,
-    doing OR operation with refIndex() and assign it to refIndex
+      Finding the index of the node from the 11th position of device path
+      and left shift it with 1,
+      doing OR operation with refIndex() and assign it to refIndex
     */
     if(checkForValidNode(dev_path)==PASS)
     {
@@ -192,15 +194,12 @@ int getDeviceInfo(int deviceIndex,char *serialNumber, char *device_Name, char *p
   struct udev_enumerate *enumerate;
   struct udev_list_entry *devices, *dev_list_entry;
   int count=0;
-  /* creating udev object */
   udev = udev_new();
   if (!udev)
   {
     printf("\nCANNOT CREATE UDEV CONTEXT...\n");
     return FAIL;
   }
-
-  /* creating enumerate object */
   enumerate = udev_enumerate_new(udev);
   if (!enumerate)
   {
@@ -227,6 +226,7 @@ int getDeviceInfo(int deviceIndex,char *serialNumber, char *device_Name, char *p
 
     //GETTING ALL THE DEVICES IN THE ABOVE PATH AND RETURN THE CHAR POINTER TO device
     device = udev_device_new_from_syspath(udev, path);//allocating a new udev device object
+
     //GETTING THE PATH OF DEVICE NODE AND SET IT TO DEV_PATH
     const char *dev_path = udev_device_get_devnode(device);
 
@@ -246,10 +246,11 @@ int getDeviceInfo(int deviceIndex,char *serialNumber, char *device_Name, char *p
     if(deviceName==NULL)
     continue;
 
-    /*CHECKING FOR VALID NODE
-    Finding the index of the node from the 11th position of device path
-    and left shift it with 1,
-    doing OR operation with refIndex() and assign it to refIndex
+    /*
+    CHECKING FOR VALID NODE
+      Finding the index of the node from the 11th position of device path
+      and left shift it with 1,
+      doing OR operation with refIndex() and assign it to refIndex
     */
     if(checkForValidNode(dev_path)==PASS)
     {
@@ -548,11 +549,8 @@ int querryBuffer()
       printf("QUERY BUFFER FAILED!!\n");
       return FAIL;
     }
-
     buffers[index].length = buf.length;
     buffers[index].start=mmap(NULL,buf.length,PROT_READ|PROT_WRITE,MAP_SHARED,fd,buf.m.offset);
-    //printf("querrybufferAFTER:%d\n",buf.length);
-
     if(buffers[index].start == MAP_FAILED) //VALIDATING FOR MMAP FAILURE
     {
       printf("MAPPING FAILED!\n");
@@ -562,7 +560,7 @@ int querryBuffer()
   return PASS;
 }
 
-//UNMAPPING WHICH WAS MAPPED BEFORE
+//UNMAPPING THE MEMORY WHICH WAS MAPPED BEFORE
 int unmap()
 {
     for (int index = 0; index < req.count;index++)
@@ -574,7 +572,7 @@ int unmap()
             return FAIL;
         }
     }
-    //Memory releasing
+    //RELEASING THE MEMORY
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.count = 0;
     req.memory =V4L2_MEMORY_MMAP;
@@ -602,6 +600,7 @@ int queueBuffer()
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
     buf.index = index;
+
     //VALIDATING QUEUE BUFFER
     if(xioctl(fd,VIDIOC_QBUF,&buf)<0)
     {
@@ -689,7 +688,6 @@ void *render(void* arg)
 //API TO START RENDERING
 int startRender()
 {
-  printf("\nREQUEST BUFFER STARTED.........\n");
   if(requestBuffer()!=PASS)
   {
     printf("\nREQUEST BUFFER FAILED\n");
@@ -710,7 +708,7 @@ int startRender()
     printf("\nSTREAM ON FAILED");
     return FAIL;
   }
-  printf("DEQUEUE THREAD STARTED.........\n");
+  runningDequeue=true;
   pthread_create(&dequeueThread,NULL,render,NULL);
   return PASS;
 }
@@ -746,7 +744,7 @@ int openDevice(int deviceIndex)
   struct udev_enumerate *enumerate;
   struct udev_list_entry *devices, *dev_list_entry;
 
-  /* creating udev object */
+  //CREATING UDEV OBJECT
   udev = udev_new();
   if (!udev)
   {
@@ -754,7 +752,7 @@ int openDevice(int deviceIndex)
     return FAIL;
   }
 
-  /* creating enumerate object */
+  //CREATING ENUMERATE OBJECT
   enumerate = udev_enumerate_new(udev);
   if (!enumerate)
   {
@@ -849,15 +847,16 @@ int setFormat(int setFormatIndex)
   memset(&frameIntervalValue, 0, sizeof(frameIntervalValue));
 
   char *description;
-  //int *pixelformat;
   formatDescriptor.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   formatDescriptor.index = 0;
   int index=0,framePerSecond=0,width,height;
   int formatIndex=1; //FOR INDEXING THE PIXEL FORMAT FOR THE RESPECTIVE DEVICE
 
-  // ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
-  // ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
-  // ENUMERATING FRAME INTERVAL VALUE FOR THAT PARTICULAR FRAMES
+  /*
+    ENUMERATING FORMAT DESCRIPTION FROM VIDIOC_ENUM_FMT
+    ENUMERATING THE FRAME SIZES FOR THAT DESCRIPTION
+    ENUMERATING FRAME INTERVAL VALUE FOR THAT PARTICULAR FRAMES
+  */
 
   while(ioctl(fd,VIDIOC_ENUM_FMT,&formatDescriptor) == 0)
   {
@@ -891,7 +890,7 @@ int setFormat(int setFormatIndex)
                 printf("\nTHE FORMAT %d IS SET\n",setFormatIndex);
                 struct v4l2_streamparm parm;
 
-                //Setting the parm type
+                //SETTING THE PARM TYPE
                 parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 if(ioctl(fd, VIDIOC_G_PARM, &parm))
                 {
@@ -899,7 +898,7 @@ int setFormat(int setFormatIndex)
                   return FAIL;
                 }
 
-                //Checking the device for fps set capability
+                //CHECKING THE DEVICE FOR FPS SET CAPABILITY
                 if (!(parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
                 {
                   printf("V4L2_CAP_TIMEPERFRAME not supported\n" );
@@ -913,7 +912,6 @@ int setFormat(int setFormatIndex)
                   printf("SET FPS FAILED\n");
                   return FAIL;
                 }
-                //return PASS;
               }
               else
               {

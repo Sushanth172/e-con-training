@@ -14,9 +14,8 @@
 
 pthread_t streamingThread;
 pthread_mutex_t streamingMutex;
+cv::Mat grabbedImage;
 bool running = true;
-bool running2 = true;
-
 int fps;
 int currentFrameHeight,currentFrameWidth;
 char currentPixelFormat[MAX_CHAR];
@@ -33,10 +32,6 @@ int streaming()
   pthread_mutex_init(&streamingMutex,NULL);
   pthread_mutex_lock(&streamingMutex);
 
-  //CREATING MAT OBJECT
-  cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
-
-
   //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
   //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
   buffer=grabFrame(&bytesused);
@@ -45,10 +40,11 @@ int streaming()
   if(buffer==NULL)
   {
     printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+    return FAIL;
   }
-
   //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
   memcpy(grabbedImage.data,buffer,bytesused);
+  //printf("\ninside streaming.................\n");
 
   //FREE THE BUFFER MEMORY EVERYTIME THE MEMCPY IS OVER
   if(buffer!=NULL)
@@ -56,7 +52,6 @@ int streaming()
     free(buffer);
     buffer=NULL;
   }
-
   //CREATING ANOTHER MAT OBJECT
   cv::Mat rgbFrame;
 
@@ -77,94 +72,11 @@ int streaming()
 //THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
 void *startStream(void* arg)
 {
-  printf("\nStart Streaming....\n");
   while(running)
   {
     if(streaming()!=PASS)
     {
       printf("\nFAILED TO STREAM\n");
-      return (void*)FAIL;
-    }
-  }
-}
-
-int streaming2()
-{
-  int fwrite_validation;
-  FILE *fptr= NULL;
-  pthread_mutex_init(&streamingMutex,NULL);
-  pthread_mutex_lock(&streamingMutex);
-
-  //CREATING MAT OBJECT
-  cv::Mat grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
-
-  //AFTER ONE DEQUEUE-QUEUE PROCESS COMPLETED...CALLING THE GRABFRAME API
-  //INORDER TO GRAB THE FRAME FROM THE RENDERING DEVICE
-  buffer=grabFrame(&bytesused);
-
-  if(currentFrameWidth==1280 && currentFrameHeight==720)
-  {
-    //OPENING THE FILE WITH APPEND BINARY MODE
-    fptr = fopen("/home/sushanth/Git/e-con-training/V4L2Library/frame.raw","wb");
-    if(fptr==NULL)
-    {
-      printf("\nERROR IN OPENING FILE\n");
-    }
-
-    //WRITING THE BUFFER INTO THE FILE FRAME.RAW
-    fwrite_validation=fwrite(buffer,bytesused,1,fptr);
-
-    //FWRITE VALIDATION
-    if(fwrite_validation != PASS)
-    {
-      printf("\nERROR IN WRITING THE FILE...\n");
-      fclose(fptr);
-      return FAIL;
-    }
-    fclose(fptr);
-  }
-
-  //VALIDATING WHEATHER THE BUFFER IS SUCCESSFULLY ALLOCATED MEMORY OR NOT
-  if(buffer==NULL)
-  {
-    printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
-  }
-
-  //COPYING THE BUFFER DATA INTO THE GRABBED IMAGE DATA
-  memcpy(grabbedImage.data,buffer,bytesused);
-
-  //FREE THE BUFFER MEMORY EVERYTIME THE MEMCPY IS OVER
-  if(buffer!=NULL)
-  {
-    free(buffer);
-    buffer=NULL;
-  }
-
-  //CREATING ANOTHER MAT OBJECT
-  cv::Mat rgbFrame;
-
-  //CONVERTING GRABBED IMAGE(UYVY) INTO BGR FORMAT USING CVTCOLOR
-  cv::cvtColor(grabbedImage, rgbFrame, cv::COLOR_YUV2BGR_UYVY);
-  cv::namedWindow("STREAMING2 FRAME", cv::WINDOW_AUTOSIZE);
-  //USING IMSHOW...DISPLAYING THE CONVERTED FRAME IN THE WINDOW
-  cv::imshow("STREAMING2 FRAME",rgbFrame);
-
-  //SETTING THE WINDOW TO VISIBLE FOR RESPECTIVE FRAMES PER SECONDS
-  cv::waitKey(MILLISECONDS/fps);
-  //printf("Start Streaming....\n");
-  pthread_mutex_unlock(&streamingMutex);
-  return PASS;
-}
-
-//THIS IS THE FUNCTION OF VOID POINTER TYPE FOR THREADING
-void *startStream2(void* arg)
-{
-  printf("Start Streaming2....\n");
-  while(running2)
-  {
-    if(streaming2()!=PASS)
-    {
-      printf("\nFAILED TO STREAM2\n");
       return (void*)FAIL;
     }
   }
@@ -191,6 +103,7 @@ int main()
   printf("\nNUMBER OF V4L2 DEVICES CONNECTED:%d",count);
   if(count == 0)
   {
+    printf("\nNO DEVICE IS CONNECTED...\n");
     return FAIL;
   }
 
@@ -244,6 +157,10 @@ int main()
     currentFrameHeight=frame_height;
     currentFrameWidth=frame_width;
 
+    //CREATING MAT OBJECT
+    grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+
+    //WAITING FOR DEQUEUE THREAD TO START
     sleep(3);
     pthread_create(&streamingThread,NULL,startStream,NULL);
 
@@ -258,29 +175,26 @@ int main()
     for(int formatIterator=0;formatIterator<formats;formatIterator++)
     {
       getFormatType(formatIterator,formatType,&width,&height,&fps);
-      printf("\n%d\tPIXEL FORMAT: %s\tHEIGHT: %d\tWIDTH: %d\tFRAMES PER SECOND : %d\t\n",formatIterator+1,formatType,height,width,fps);
+      printf("\n%d\tPIXEL FORMAT: %s\tWIDTH: %d\tHEIGHT: %d\tFRAMES PER SECOND : %d\t\n",formatIterator+1,formatType,width,height,fps);
       printf("-------------------------------------------------------------------------------------------------------");
     }
 
-    printf("\nPRESS 1 IF YOU WANT TO SET THE FORMAT:");
+    printf("\nPRESS 1 IF YOU WANT TO SET THE FORMAT: ");
     scanf("%d",&exit1);
+
     if(exit1==1)
     {
       running = false;
       pthread_join(streamingThread,NULL);
-      //sleep(5);
-      //pthread_exit((void*)streamingThread);
       pthread_cancel(streamingThread);
       pthread_mutex_destroy(&streamingMutex);
-      //cv::destroyAllWindows();
       cv::destroyWindow("STREAMING1");
+
       //GETTING THE FORMAT INDEX FROM THE USER TO SET THAT FORMAT TO THE DEVICE
       printf("\nENTER THE FORMAT INDEX TO SET THE FORMAT: ");
       scanf("%d",&formatIndexFromUser);
-      //printf("\nhere\n");
       if(formatIndexFromUser <= formats && formatIndexFromUser != 0)
       {
-        //printf("\nhere1\n");
         setFormat(formatIndexFromUser);
       }
     }
@@ -297,18 +211,41 @@ int main()
     printf("WIDTH        :%d\n",currentFrameWidth);
     printf("PIXEL FORMAT :%s\n",currentPixelFormat);
 
-    //API TO START THE RENDERING AND TO CREATE THE THREAD OPERATION
-    //startRender();
+    //VALIDATION IF THE MAT OBJECT IS EMPTY OR NOT....
+    //IF NOT EMPTY, RELEASE IT AND ALLOCATING THE SIZE
+    if(grabbedImage.empty()==true)
+    {
+      //CREATING MAT OBJECT
+      grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+    }
+    else
+    {
+      grabbedImage.release();
+      grabbedImage = cv::Mat(currentFrameHeight, currentFrameWidth,CV_8UC2);
+    }
 
     //MAKE ONE SEC WAIT FOR ATLEAST ONE DEQUEUE-QUEUE PROCESS TO COMPLETE
-    sleep(2);
-    pthread_create(&streamingThread,NULL,startStream2,NULL);
-    sleep(2);
+   sleep(3);
+
+    /*
+       RUNNING IS FALSE WHEN SETTING THE FORMAT FOR THE DEVICE
+       IN ORDER TO STREAM AGAIN AFTER THE FORMAT SET...RUNNING=TRUE
+    */
+    running=true;
+    pthread_create(&streamingThread,NULL,startStream,NULL);
+    
     printf("\nPRESS 0 TO STOP STREAMING\n");
     scanf("%d",&exit);
+
     if(exit==0)
     {
+      //STOP THE THREAD(IMSHOW)
       running = false;
+      pthread_join(streamingThread,NULL);
+      pthread_cancel(streamingThread);
+      pthread_mutex_destroy(&streamingMutex);
+      cv::destroyWindow("STREAMING1");
+
       //CLOSING THE DEVICE
       closeDevice();
     }

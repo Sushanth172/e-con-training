@@ -1,0 +1,48 @@
+cmake_minimum_required(VERSION 3.5)
+project(DepthVistaSDK VERSION 1.0.0 LANGUAGES CXX)
+
+set(DEFAULT_BUILD_TYPE "Release")
+set(DEPTHVISTA_INCLUDE_DIRS "${CMAKE_INSTALL_INCLUDEDIR}/")
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' as none was specified.")
+  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+
+if( UNIX )
+	set(PLATFORM_SPECIFIC_DIR platform/linux/)
+
+
+# Platform specific sources and headers
+file(GLOB PLATFORM_SOURCES
+		${CMAKE_CURRENT_SOURCE_DIR}/src/${PLATFORM_SPECIFIC_DIR}/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/${PLATFORM_SPECIFIC_DIR}/*.hpp
+)
+
+find_package(OpenCV REQUIRED)
+
+
+
+
+target_include_directories(${PROJECT_NAME} PRIVATE include )
+target_include_directories(${PROJECT_NAME} PRIVATE src ${OpenCV_INCLUDE_DIRS})
+
+
+target_link_libraries (${PROJECT_NAME} ${OpenCV_LIBRARIES} udev)
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1)
+
+
+
+
+install(TARGETS ${PROJECT_NAME} EXPORT DepthVistaConfig
+    ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DepthVistaSDK)
+
+install(EXPORT DepthVistaConfig DESTINATION share/DepthVista/cmake)

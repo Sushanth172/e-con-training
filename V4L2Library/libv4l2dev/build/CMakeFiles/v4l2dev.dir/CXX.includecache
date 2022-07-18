@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/sushanth/Git/e-con-training/V4L2Library/libv4l2dev/v4l2dev.cpp
+v4l2dev.h
+/home/sushanth/Git/e-con-training/V4L2Library/libv4l2dev/v4l2dev.h
+stdio.h
+-
+stdlib.h
+-
+errno.h
+-
+libudev.h
+-
+libusb-1.0/libusb.h
+-
+libv4l2.h
+-
+sys/ioctl.h
+-
+sys/mman.h
+-
+unistd.h
+-
+linux/videodev2.h
+-
+linux/uvcvideo.h
+-
+fcntl.h
+-
+string.h
+-
+iostream
+-
+pthread.h
+-
+
+/home/sushanth/Git/e-con-training/V4L2Library/libv4l2dev/v4l2dev.h
+

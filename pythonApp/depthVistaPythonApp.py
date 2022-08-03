@@ -2,16 +2,24 @@ import cv2
 import ctypes
 from ctypes import *
 
+from typing import NamedTuple
 import hid
-
 
 def intro():
     print(" E-con's Depth Vista OpenCV Python Application ".center(100, "*"))
     print('OpenCV Python App Version = 1.0.3'.center(100, " "))
     print("Running in Linux Platform".center(100, " "))
 
-class MainClass:
 
+class DeviceInfo(ctypes.Structure):
+    attributes = [
+                  ('deviceName',ctypes.c_wchar_p),    #c_wchar_p is the pointer to the string
+                  ('vid',ctypes.c_wchar_p),
+                  ('pid',ctypes.c_wchar_p),
+                  ('devicePath',ctypes.c_wchar_p),
+                  ('serialNo',ctypes.c_wchar_p)
+                 ]
+class MainClass:
     '''
         Main Class: The initiator class. The program starts from here.
     '''
@@ -19,7 +27,7 @@ class MainClass:
         sharedLibary = "libDepthVistaSDK.so"
         depthVistaLib = ctypes.CDLL(sharedLibary)
 
-        # Initialize(API) from the library
+        # CAN open API from library
         result = depthVistaLib.Initialize
         result.restype = ctypes.c_int
         if result() == 0:
@@ -42,10 +50,30 @@ class MainClass:
             print("\nFAILED IN GETTING DEVICE COUNT\n")
 
 
+        '''
+            GETTING DEVICE LIST INFORMATION
+        '''
+        listDevicesResult = depthVistaLib.GetDeviceInfo
+        listDevicesResult.argtypes = [ ctypes.c_uint32, ctypes.POINTER(DeviceInfo)]
+        listDevicesResult.restype = ctypes.c_int
+
+        #Passing numberOfDevices by value
+        numberOfDevices = ctypes.c_uint32 ()
+
+        #Passing DeviceList By Reference by using byref
+        deviceList = DeviceInfo()
+
+        if(listDevicesResult(numberOfDevices,ctypes.byref(deviceList)) == 1):
+            print("\nSUCCESS IN GETTING DEVICE LIST\n")
+            print(f'\nDEVICE NAME : {deviceList.deviceName}')
+            #print("DEVICE NAME :",deviceList.deviceName)
+            # print 'DEVICE NAME :',DeviceInfo.deviceName
+            # print 'VENDOR ID   :',DeviceInfo.vid
+        else:
+            print("\nFAILED IN GETTING DEVICE LIST\n")
+
 
 ''' DRIVER FUNCTION '''
 if __name__ == "__main__":
     intro()
     main = MainClass()
-
-

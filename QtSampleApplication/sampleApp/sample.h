@@ -2,8 +2,11 @@
 #define SAMPLE_H
 
 #include <QDebug>
-#include <v4l2dev.h>
+#include </home/nivedha/v4l2dev.h>
 #include <QStringListModel>
+#include <unistd.h>
+
+#define MAX_CHAR 100
 
 class Sample : public QObject
 {
@@ -17,15 +20,14 @@ class Sample : public QObject
     Sample();
     ~Sample();
     int number;
-    char *DeviceName;
-    char *sno;
-    char *pId;
-    char *vId;
-    char *devicePath;
-    QStringList deviceName;
+    char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
+    char productId[MAX_CHAR], vendorId[MAX_CHAR];
+    int bytesused;
+    unsigned char *buffer=NULL;
+    QStringList deviceNameList;
 
 public slots:
-        void callFunc();
+        void deviceEnumeration();
         void selectDevice(int deviceIndex);
 };
 

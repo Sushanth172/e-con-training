@@ -7,44 +7,64 @@ QStringListModel Sample::fpsModel;
 Sample::Sample()
 {
     number = 10;
-    DeviceName="";
-    pId ="";
-    vId ="";
-    devicePath="";
-    sno="";
-    DeviceName = (char*) malloc(20);
-    sno = (char*) malloc(20);
-    pId = (char*) malloc(20);
-    vId = (char*) malloc(20);
-    devicePath = (char*) malloc(20);
+    bytesused=10;
+    buffer=(unsigned char*) malloc(500000);
 }
 
 Sample::~Sample()
 {
-//    qDebug() << Q_FUNC_INFO;
-   free(sno);
-   free(DeviceName);
-   free(pId);
-   free(vId);
-   free(devicePath);
-
+    //    qDebug() << Q_FUNC_INFO;
 }
 
-void Sample::callFunc(){
+void Sample::deviceEnumeration(){
     int iterator;
-    deviceName.clear();
-//  qDebug() << Q_FUNC_INFO;
+    deviceNameList.clear();
+    deviceNameList.append("Select Device");
+    //  qDebug() << Q_FUNC_INFO;
     getDeviceCount(&number);
-    qDebug() << number;
-
-    for(iterator=0;iterator<number;iterator++)
+    for(iterator=1;iterator<=number;iterator++)
     {
-        getDeviceInfo(number,sno,DeviceName,pId,vId,devicePath);
-        deviceName << DeviceName;
+        getDeviceInfo(iterator,serialNumber,deviceName,productId,vendorId,devicePath);
+        qDebug() << iterator << " " << serialNumber << " " << deviceName << " " << productId << " " << vendorId << " " << devicePath;
+        deviceNameList << deviceName;
     }
-    deviceNameModel.setStringList(deviceName);
+    deviceNameModel.setStringList(deviceNameList);
 
 }
-void Sample::selectDevice(index){
-    openDevice(index);
+void Sample::selectDevice(int index){
+
+    if(index>0)
+    {
+        qDebug()<<"Index from comboBox:"<<index;
+        openDevice(index);
+        grabFrame(&bytesused);
+        int fwriteValidation=1;
+
+        buffer=grabFrame(&bytesused);
+        sleep(10);
+        buffer=grabFrame(&bytesused);
+        qDebug()<<"Used"<<bytesused;
+        qDebug()<<"index:"<<index;
+        if(buffer==NULL)
+        {
+            printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+        }
+        FILE *filePtr = NULL;
+        filePtr = fopen("/home/nivedha/qtSample.raw","wb");
+        if(filePtr== NULL)
+        {
+            printf("This %s file could not open....","qtSample.raw");
+        }
+        fwriteValidation=fwrite(buffer,bytesused,1,filePtr);
+
+        if(fwriteValidation==bytesused)
+        {
+            printf("Success");
+            fclose(filePtr);
+            return;
+        }
+        printf("Failed");
+
+        fclose(filePtr);
+    }
 }

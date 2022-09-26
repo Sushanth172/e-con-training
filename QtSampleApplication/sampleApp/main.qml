@@ -49,7 +49,9 @@ ApplicationWindow {
                 onCurrentIndexChanged:
                 {
                     console.log("Current_Index:"+currentIndex)
-                    camera.selectDevice(currentIndex)
+//                    camera.selectDevice(currentIndex)
+                    sideBar.getTab(0).item.children[0].enabled = true
+
 
                 }
 //                Component.onCompleted:
@@ -76,6 +78,7 @@ ApplicationWindow {
                             onCurrentIndexChanged:
                             {
     //                            camera.enumResolution(currentIndex)
+                                camera.selectDevice(currentIndex)
                                 resolution_combo_box.enabled = true
                             }
                             Component.onCompleted: enabled = false
@@ -93,23 +96,26 @@ ApplicationWindow {
                             }
                             Component.onCompleted: enabled = false
                         }
-                        ComboBox
-                        {
-                            implicitWidth: 250
-                            id:fps_combo_box
-                            model: fps
-                            textRole: "display"
-                            onCurrentIndexChanged:
-                            {
-    //                            camera.enumResolution(currentIndex)
-                            }
-                            Component.onCompleted: enabled = false
-                        }
-                    }
+//                        ComboBox
+//                        {
+//                            implicitWidth: 250
+//                            id:fps_combo_box
+//                            model: fps
+//                            textRole: "display"
+//                            onCurrentIndexChanged:
+//                            {
+//    //                            camera.enumResolution(currentIndex)
+//                            }
+//                            Component.onCompleted: enabled = false
+//                        }
+//                    }
                 }
                 Tab{
                     id: tab2
                     title: "Extention Controls"
+                    ColumnLayout{
+
+                    }
                 }
             }
 
@@ -141,4 +147,4 @@ ApplicationWindow {
 //                            }
 //                        }
 
-//                    }
+                    }

@@ -2,13 +2,16 @@
 #define SAMPLE_H
 
 #include <QDebug>
-#include </home/nivedha/v4l2dev.h>
+#include <v4l2dev.h>
 #include <QStringListModel>
 #include <unistd.h>
+#include <qquickitem.h>
+#include "renderer.h"
+#include <QTimer>
 
 #define MAX_CHAR 100
 
-class Sample : public QObject
+class Sample : public QQuickItem
 {
   Q_OBJECT
   public:
@@ -20,19 +23,21 @@ class Sample : public QObject
     Sample();
     ~Sample();
     int number;
+    Renderer *m_renderer;
+    bool MJPEG_flag = false;
     char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
     char productId[MAX_CHAR], vendorId[MAX_CHAR];
     int bytesused;
-    int width,height,fps;
     unsigned char *buffer=NULL;
-    int deviceFormats;
     QStringList deviceNameList;
-    QStringList formatsList;
-    QStringList resolutionList;
+    void paint();
+    QTimer *timer;
+    bool renderFlag;
 
 public slots:
         void deviceEnumeration();
         void selectDevice(int deviceIndex);
+        void grabframe();
 };
 
 #endif // SAMPLE_H

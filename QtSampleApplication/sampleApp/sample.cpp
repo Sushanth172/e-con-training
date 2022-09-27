@@ -1,19 +1,20 @@
 #include "sample.h"
-#define DEFAULT 1
 QStringListModel Sample::deviceNameModel;
 QStringListModel Sample::formatModel;
 QStringListModel Sample::resolutionModel;
 QStringListModel Sample::fpsModel;
 
+#define FRAME_WIDTH 1280
+#define FRAME_HEIGHT 720
+
 Sample::Sample()
 {
-    number = 10;
-    bytesused=10;
-    deviceFormats=10;
-    width=10;
-    height=10;
-    fps=10;
-    buffer=(unsigned char*) malloc(500000);
+    number = 0;
+    bytesused=0;
+    buffer=(unsigned char*) malloc(FRAME_HEIGHT*FRAME_WIDTH*2);
+    m_renderer = NULL;
+    timer = new QTimer(this);
+    renderFlag = false;
 }
 
 Sample::~Sample()
@@ -25,60 +26,58 @@ void Sample::deviceEnumeration(){
     int iterator;
     deviceNameList.clear();
     deviceNameList.append("Select Device");
-    //  qDebug() << Q_FUNC_INFO;
     getDeviceCount(&number);
     for(iterator=1;iterator<=number;iterator++)
     {
         getDeviceInfo(iterator,serialNumber,deviceName,productId,vendorId,devicePath);
-        qDebug() << iterator << " " << serialNumber << " " << deviceName << " " << productId << " " << vendorId << " " << devicePath;
         deviceNameList << deviceName;
     }
     deviceNameModel.setStringList(deviceNameList);
-
 }
 void Sample::selectDevice(int index){
 
     if(index>0)
     {
-        qDebug()<<"Index from comboBox:"<<index;
         openDevice(index);
-        buffer=grabFrame(&bytesused);
-        getFormatType(index,"UYVY",&width,&height,&fps);
-//        getFormatType(formatIterator,formatType,&width,&height,&fps);
 
+        if (!m_renderer)
+        {
+            m_renderer = new Renderer();
+            m_renderer->renderer_width = FRAME_WIDTH;
+            m_renderer->renderer_height = FRAME_HEIGHT;
+            m_renderer->calculateViewport((window()->height()-100),(window()->width()-300));            //calculating viewport size
+            connect( window(), &QQuickWindow::afterRendering, this, &Sample::paint, Qt::DirectConnection);
+        }
+        if(MJPEG_flag)
+        {
+            m_renderer->set_shaders_RGB();
+        }
+        else
+        {
+            m_renderer->set_shaders_UYVY();
+        }
 
-//        getFormats(&deviceFormats);
-//        formatsList << deviceFormats;
-//        formatModel.setStringList(formatsList);
-
+        sleep(2);
+        renderFlag = true;
     }
 }
-//grabFrame(&bytesused);
-//int fwriteValidation=1;
 
-//buffer=grabFrame(&bytesused);
-//sleep(10);
-//buffer=grabFrame(&bytesused);
-//qDebug()<<"Used"<<bytesused;
-//qDebug()<<"index:"<<index;
-//        if(buffer==NULL)
-//        {
-//            printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
-//        }
-//        FILE *filePtr = NULL;
-//        filePtr = fopen("/home/nivedha/qtSample.raw","wb");
-//        if(filePtr== NULL)
-//        {
-//            printf("This %s file could not open....","qtSample.raw");
-//        }
-//        fwriteValidation=fwrite(buffer,bytesused,1,filePtr);
+void Sample::grabframe()
+{
+    buffer=grabFrame(&bytesused);
+    if(buffer==NULL)
+    {
+        printf("\nMEMORY NOT ALLOCATED IN BUFFER IN GRAB FRAME\n");
+    }
+    m_renderer->getImageBuffer(buffer);
+}
 
-//        if(fwriteValidation==bytesused)
-//        {
-//            printf("Success");
-//            fclose(filePtr);
-//            return;
-//        }
-//        printf("Failed");
 
-//        fclose(filePtr);
+void Sample::paint()
+{
+    if(renderFlag)
+        grabframe();
+    m_renderer->paint();
+    window()->resetOpenGLState();
+    window()->update();
+}

@@ -4,7 +4,8 @@ QT += qml quick
 CONFIG += c++11
 
 SOURCES += main.cpp \
-    sample.cpp
+    sample.cpp \
+    renderer.cpp
 
 RESOURCES += qml.qrc
 
@@ -21,6 +22,7 @@ QML_DESIGNER_IMPORT_PATH =
 DEFINES += QT_DEPRECATED_WARNINGS
 
 LIBS += -lv4l2dev \
+ -L/usr/lib/ -lturbojpeg \
 
 # You can also make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -33,4 +35,5 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 HEADERS += \
-    sample.h
+    sample.h \
+    renderer.h

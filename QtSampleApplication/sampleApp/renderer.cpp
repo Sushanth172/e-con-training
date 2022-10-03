@@ -59,39 +59,48 @@ void Renderer::device_lost()
 
 void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination, long int source_size,int stride)
 {
+    qDebug()<<"Inside Mjpeg Decoder";
     if(source_size)
     {
-        mutex.lock();
+        qDebug()<<"Inside Mjpeg Decoder1";
+
+        mutex4.lock();
         int subsample=0,frame_height=0,frame_width=0;
 
         tjhandle handle=tjInitDecompress();
         if(!handle)
             perror("Failed to init decompressor");
 
-        if(source[0] == 0xFF && source[1]==0xD8)
-        {
+        //Checking for 1st 2 bytes in MJPEG frame
+//        if(source[0] == 0xFF && source[1]==0xD8)
+//        {
+            qDebug()<<"Inside Mjpeg Decoder2";
+
             if(tjDecompressHeader2(handle,source,source_size,&frame_width,&frame_height,&subsample)<0)
             {
                 qDebug() << "Error while decompressing header:" << tjGetErrorStr();
             }
             else
             {
-                if(tjDecompress2(handle,source,source_size,destination,frame_width,stride,frame_height,TJPF_RGBA,TJFLAG_NOREALLOC)<0)
+                qDebug()<<"Inside Mjpeg Decoder3";
+                //Actual Decompression happening here
+                if(tjDecompress2(handle,source,source_size,destination,frame_width,stride,frame_height,TJPF_RGBA,TJFLAG_NOREALLOC)>0)
                 {
-
-                    //                    FILE *fp=NULL;
-                    //                    fp=fopen("/home/econsys6/yuv.JPG","wb");
-                    //                    if(!fp)
-                    //                    {
-                    //                        qDebug("file not open");
-                    //                    }
-                    //                    fwrite(source,1,source_size,fp);
-                    //                    fclose(fp);
+                    qDebug()<<"\nFAILED TO DECOMPRESS";
                 }
+
+                FILE *fp=NULL;
+                fp=fopen("test.raw","wb");
+                if(!fp)
+                {
+                    qDebug("file not open");
+                }
+                fwrite(source,1,source_size,fp);
+                fclose(fp);
             }
-        }
+//        }
         tjDestroy(handle);
-        mutex.unlock();
+        mutex4.unlock();
     }
 }
 
@@ -133,22 +142,28 @@ void Renderer::calculateViewport(int windowHeight,int windowWidth)
 
 void Renderer::paint()
 {
+    qDebug()<<"\nPAINT IN RENDERER1";
     glViewport(x,y,viewport_width,viewport_height);                 //setting viewport value
+    qDebug()<<"\nPAINT IN RENDERER2";
     drawBuffer();
+    qDebug()<<"\nPAINT IN RENDERER3";
 }
 
-void Renderer::getImageBuffer(unsigned char *buf)
+void Renderer::getImageBuffer(unsigned char *inputBuffer)
 {
-    mutex.lock();
-    if(buf)
+    ImageBufferMutex.lock();
+    if(inputBuffer)
     {
-        memcpy(image_buffer,buf, renderer_height*renderer_width*2);
+        qDebug()<<"\nINSIDE IMAGE BUFFER1";
+        memcpy(image_buffer,inputBuffer,renderer_height*renderer_width*3);
+        qDebug()<<"\nINSIDE IMAGE BUFFER2";
     }
-    mutex.unlock();
+    ImageBufferMutex.unlock();
 }
+
 void Renderer::set_shaders_RGB()
 {
-    //    qDebug() << "rgb shader called";
+    qDebug() << "\nRGB SHADER CALLED";
     clear_shader();
     if(m_shaderProgram)
     {
@@ -158,16 +173,14 @@ void Renderer::set_shaders_RGB()
     image_buffer=(unsigned char*)realloc(image_buffer,(renderer_height*renderer_width*4));
     if(!image_buffer)
     {
-        qDebug("RGB memory not allocated");
+        qDebug("\nRGB MEMORY NOT ALLOCATED");
         return ;
     }
     memset(image_buffer,0,(renderer_height*renderer_width*4));
     if(!m_shaderProgram)
     {
         initializeOpenGLFunctions();
-
         m_shaderProgram = new QOpenGLShaderProgram();
-
         m_shaderProgram->addShaderFromSourceCode(QOpenGLShader::Vertex,
                                                  "attribute vec4 a_position;\n"
                                                  "attribute vec2 a_texCoord;\n"
@@ -204,6 +217,7 @@ void Renderer::set_shaders_RGB()
         glActiveTexture(GL_TEXTURE1);
         glBindTexture (GL_TEXTURE_2D, TextureId);
         mjpeg_flag=true;
+        qDebug() << "\nRGB SHADER FINISHED";
     }
 }
 
@@ -215,7 +229,7 @@ void Renderer::set_shaders_UYVY()
         delete m_shaderProgram;
         m_shaderProgram=NULL;
     }
-    image_buffer=(unsigned char*)realloc(image_buffer,(renderer_height*renderer_width*2));
+    image_buffer=(unsigned char*)realloc(image_buffer,(renderer_height*renderer_width*3));
 
     if(!image_buffer)
     {
@@ -331,13 +345,13 @@ void Renderer::drawBuffer()
     glBindTexture(GL_TEXTURE_2D,TextureId);
     glUniform1i(samplerLoc,1);
 
-    mutex.lock();
+    mutex3.lock();
 
     if(mjpeg_flag)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
     else
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width/2, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
-    mutex.unlock();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
+    mutex3.unlock();
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, mIndicesData);
 
     m_shaderProgram->disableAttributeArray(0);

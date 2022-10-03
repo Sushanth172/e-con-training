@@ -25,7 +25,7 @@ public:
     int renderer_width,renderer_height,x,y,viewport_width,viewport_height;
     void set_shaders_UYVY();
     void set_shaders_RGB();
-    QMutex mutex;
+    QMutex grabframeMutex, ImageBufferMutex,mutex3,mutex4;
     int bytesused;
     void mjpeg_decompress(unsigned char *source, unsigned char *destination, long int source_size,int stride);
     void paint();
@@ -36,7 +36,7 @@ signals:
     void gotbuffer();
 
 public slots:
-    //    void set_picture(QImage img);
+//  void set_picture(QImage img);
     void getImageBuffer(unsigned char *buf);
     void drawBuffer();
 

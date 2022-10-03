@@ -4,8 +4,8 @@ QT += qml quick
 CONFIG += c++11
 
 SOURCES += main.cpp \
-    sample.cpp \
-    renderer.cpp
+    renderer.cpp \
+    application.cpp
 
 RESOURCES += qml.qrc
 
@@ -35,5 +35,5 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 HEADERS += \
-    sample.h \
-    renderer.h
+    renderer.h \
+    application.h

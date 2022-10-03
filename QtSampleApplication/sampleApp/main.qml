@@ -46,6 +46,7 @@ ApplicationWindow {
             {
                 console.log("Current_Index:"+currentIndex)
                 camera.selectDevice(currentIndex)
+//                sideBar.getTab(0).item.children[0].enabled = true
 
             }
         }
@@ -66,6 +67,7 @@ ApplicationWindow {
                         textRole: "display"
                         onCurrentIndexChanged:
                         {
+//                            camera.formatType(currentIndex)
                             resolution_combo_box.enabled = true
                         }
                         Component.onCompleted: enabled = false

@@ -72,8 +72,8 @@ void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination
             perror("Failed to init decompressor");
 
         //Checking for 1st 2 bytes in MJPEG frame
-//        if(source[0] == 0xFF && source[1]==0xD8)
-//        {
+        if(source[0] == 0xFF && source[1]==0xD8)
+        {
             qDebug()<<"Inside Mjpeg Decoder2";
 
             if(tjDecompressHeader2(handle,source,source_size,&frame_width,&frame_height,&subsample)<0)
@@ -90,7 +90,7 @@ void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination
                 }
 
                 FILE *fp=NULL;
-                fp=fopen("test.raw","wb");
+                fp=fopen("test.jpg","wb");
                 if(!fp)
                 {
                     qDebug("file not open");
@@ -98,7 +98,7 @@ void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination
                 fwrite(source,1,source_size,fp);
                 fclose(fp);
             }
-//        }
+        }
         tjDestroy(handle);
         mutex4.unlock();
     }
@@ -348,7 +348,7 @@ void Renderer::drawBuffer()
     mutex3.lock();
 
     if(mjpeg_flag)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width/2, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
     else
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
     mutex3.unlock();

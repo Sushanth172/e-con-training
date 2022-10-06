@@ -41,7 +41,7 @@ public slots:
     void drawBuffer();
 
 private:
-    bool mjpeg_flag;
+    bool MJPEG_flag;
     unsigned char *image_buffer;
     QOpenGLShaderProgram *m_shaderProgram;
     QQuickWindow *m_window;

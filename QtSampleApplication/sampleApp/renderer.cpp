@@ -22,7 +22,7 @@ Renderer::Renderer()
 {
     image_buffer=NULL;
     m_shaderProgram = NULL;
-    mjpeg_flag=false;
+    MJPEG_flag=false;
 }
 
 Renderer::~Renderer()
@@ -59,10 +59,10 @@ void Renderer::device_lost()
 
 void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination, long int source_size,int stride)
 {
-    qDebug()<<"Inside Mjpeg Decoder";
+//    qDebug()<<"Inside Mjpeg Decoder";
     if(source_size)
     {
-        qDebug()<<"Inside Mjpeg Decoder1";
+//        qDebug()<<"Inside Mjpeg Decoder1";
 
         mutex4.lock();
         int subsample=0,frame_height=0,frame_width=0;
@@ -74,7 +74,7 @@ void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination
         //Checking for 1st 2 bytes in MJPEG frame
         if(source[0] == 0xFF && source[1]==0xD8)
         {
-            qDebug()<<"Inside Mjpeg Decoder2";
+//            qDebug()<<"Inside Mjpeg Decoder2";
 
             if(tjDecompressHeader2(handle,source,source_size,&frame_width,&frame_height,&subsample)<0)
             {
@@ -82,7 +82,7 @@ void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination
             }
             else
             {
-                qDebug()<<"Inside Mjpeg Decoder3";
+//                qDebug()<<"Inside Mjpeg Decoder3";
                 //Actual Decompression happening here
                 if(tjDecompress2(handle,source,source_size,destination,frame_width,stride,frame_height,TJPF_RGBA,TJFLAG_NOREALLOC)>0)
                 {
@@ -98,7 +98,9 @@ void Renderer::mjpeg_decompress(unsigned char *source,unsigned char *destination
                 fwrite(source,1,source_size,fp);
                 fclose(fp);
             }
+            qDebug()<<"MJPEG DECOMPRESS COMPLETED";
         }
+
         tjDestroy(handle);
         mutex4.unlock();
     }
@@ -142,11 +144,11 @@ void Renderer::calculateViewport(int windowHeight,int windowWidth)
 
 void Renderer::paint()
 {
-    qDebug()<<"\nPAINT IN RENDERER1";
+//    qDebug()<<"\nPAINT IN RENDERER1";
     glViewport(x,y,viewport_width,viewport_height);                 //setting viewport value
-    qDebug()<<"\nPAINT IN RENDERER2";
+//    qDebug()<<"\nPAINT IN RENDERER2";
     drawBuffer();
-    qDebug()<<"\nPAINT IN RENDERER3";
+    qDebug()<<"\nPAINT IN RENDERER COMPLETED";
 }
 
 void Renderer::getImageBuffer(unsigned char *inputBuffer)
@@ -156,7 +158,7 @@ void Renderer::getImageBuffer(unsigned char *inputBuffer)
     {
         qDebug()<<"\nINSIDE IMAGE BUFFER1";
         memcpy(image_buffer,inputBuffer,renderer_height*renderer_width*3);
-        qDebug()<<"\nINSIDE IMAGE BUFFER2";
+        qDebug()<<"\nIMAGE BUFFER COMPLETED";
     }
     ImageBufferMutex.unlock();
 }
@@ -216,7 +218,7 @@ void Renderer::set_shaders_RGB()
         glGenTextures (1, &TextureId); // Generate a texture object
         glActiveTexture(GL_TEXTURE1);
         glBindTexture (GL_TEXTURE_2D, TextureId);
-        mjpeg_flag=true;
+        MJPEG_flag=true;
         qDebug() << "\nRGB SHADER FINISHED";
     }
 }
@@ -229,7 +231,7 @@ void Renderer::set_shaders_UYVY()
         delete m_shaderProgram;
         m_shaderProgram=NULL;
     }
-    image_buffer=(unsigned char*)realloc(image_buffer,(renderer_height*renderer_width*3));
+    image_buffer=(unsigned char*)realloc(image_buffer,(renderer_height*renderer_width*2));
 
     if(!image_buffer)
     {
@@ -318,7 +320,8 @@ void Renderer::set_shaders_UYVY()
 
         // Bind the texture object
         glBindTexture (GL_TEXTURE_2D, TextureId);
-        mjpeg_flag=false;
+        MJPEG_flag=false;
+        qDebug() << "\nUYVY SHADER FINISHED";
     }
 
 }
@@ -347,7 +350,7 @@ void Renderer::drawBuffer()
 
     mutex3.lock();
 
-    if(mjpeg_flag)
+    if(MJPEG_flag)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width/2, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);
     else
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, renderer_width, renderer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE,image_buffer);

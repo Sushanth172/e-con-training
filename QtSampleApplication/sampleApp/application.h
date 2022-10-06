@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <qquickitem.h>
 #include "renderer.h"
+#include "h264decoder.h"
 #include <linux/videodev2.h>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
@@ -27,7 +28,9 @@ class Application : public QQuickItem
     ~Application();
     int number;
     Renderer *m_renderer;
+    H264Decoder *H264_Decoder;
     bool MJPEG_flag = false;
+    bool H264_flag = false;
     char devicePath[MAX_CHAR],serialNumber[MAX_CHAR], deviceName[MAX_CHAR];
     char productId[MAX_CHAR], vendorId[MAX_CHAR];
     int bytesused;
@@ -37,20 +40,32 @@ class Application : public QQuickItem
     struct v4l2_format frmt;
     struct v4l2_streamparm strparm;
 
-    QStringList deviceNameList;
-    QStringList FormatList;
-//    QStringList Form
-//    int formats, width, height, fps;
+    QStringList deviceNameList,FormatList,resolution_List, fps_List;
+    int width, height, fps,NoOfFormats;
+    char formats;
+
+    int comboBox_format_index=0,comboBox_res_index=0,comboBox_fps_index=0,initial_check_index;
+
     QFuture<void> future,decompressFuture;
     char format_type;
     void paint();
     QTimer *timer;
     bool renderFlag;
 
+signals:
+    void emitformats(int deviceIndex);
+    void emitresolution(int deviceIndex);
+    void emitfps(int deviceIndex);
+    void devicedisconnected();
+
 public slots:
         void deviceEnumeration();
-        void selectDevice(int deviceIndex);
-//        void formatType();
+        int selectDevice(int deviceIndex);
+        int totalFormats(int deviceIndex);
+        void enumFormat();
+        void enumResolution(int resIndex);
+        void enumFps(int fpsIndex);
+//        void deviceDetails(int index1);
 //        static void render(Application *app);
         void grabframe();
 };

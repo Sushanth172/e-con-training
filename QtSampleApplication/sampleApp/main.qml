@@ -23,6 +23,13 @@ ApplicationWindow {
 
     ColumnLayout{
         id:columnlayout1
+//        MessageDialog
+//        {
+//            id:dialog
+//            title: "Notification"
+//            text: "Device connection lost."
+//            Component.onCompleted: visible = false
+//        }
 
         ComboBox {
             id: deviceListComboBox
@@ -44,10 +51,13 @@ ApplicationWindow {
             }
             onCurrentIndexChanged:
             {
-                console.log("Current_Index:"+currentIndex)
+                console.log("Current_Index on device Enumeration:"+currentIndex)
                 camera.selectDevice(currentIndex)
-//                sideBar.getTab(0).item.children[0].enabled = true
-
+                sideBar.getTab(0).item.children[0].enabled = true
+            }
+            Component.onCompleted:
+            {
+                camera.deviceEnumeration()
             }
         }
 
@@ -67,7 +77,8 @@ ApplicationWindow {
                         textRole: "display"
                         onCurrentIndexChanged:
                         {
-//                            camera.formatType(currentIndex)
+                            console.log("Current_Index on format box:"+currentIndex)
+                            camera.enumFormat(currentIndex)
                             resolution_combo_box.enabled = true
                         }
                         Component.onCompleted: enabled = false
@@ -80,6 +91,8 @@ ApplicationWindow {
                         textRole: "display"
                         onCurrentIndexChanged:
                         {
+                            console.log("Current_Index on resolution box:"+currentIndex)
+                            camera.enumResolution(currentIndex)
                             fps_combo_box.enabled = true
                         }
                         Component.onCompleted: enabled = false
@@ -92,6 +105,8 @@ ApplicationWindow {
                         textRole: "display"
                         onCurrentIndexChanged:
                         {
+                            console.log("Current_Index on fps box:"+currentIndex)
+                            camera.enumFps(currentIndex)
                         }
                         Component.onCompleted: enabled = false
                     }
@@ -106,6 +121,30 @@ ApplicationWindow {
     }
     Devices{
         id: camera
+        onEmitformats: {
+            sideBar.getTab(0).item.children[0].currentIndex = deviceIndex
+        }
+        onEmitresolution: {
+            sideBar.getTab(0).item.children[1].currentIndex = deviceIndex
+        }
+        onEmitfps: {
+            sideBar.getTab(0).item.children[2].currentIndex = deviceIndex
+        }
+        onDevicedisconnected: {
+            dialog.visible = true
+
+            sideBar.getTab(0).item.children[0].currentIndex=0
+            sideBar.getTab(0).item.children[1].currentIndex=0
+            sideBar.getTab(0).item.children[2].currentIndex=0
+
+            sideBar.getTab(0).item.children[0].currentIndex.enabled=false
+            sideBar.getTab(0).item.children[1].currentIndex.enabled=false
+            sideBar.getTab(0).item.children[2].currentIndex.enabled=false
+        }
+
+//        onEmitformat: {
+//            sideBar.getTab(0).item.children[0].currentIndex = index
+//        }
     }
 
 }

@@ -5,7 +5,8 @@ CONFIG += c++11
 
 SOURCES += main.cpp \
     renderer.cpp \
-    application.cpp
+    application.cpp\
+    h264decoder.cpp
 
 RESOURCES += qml.qrc
 
@@ -23,6 +24,9 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 LIBS += -lv4l2dev \
  -L/usr/lib/ -lturbojpeg \
+        -lavutil \
+        -lavcodec \
+        -lavformat
 
 # You can also make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -36,4 +40,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 HEADERS += \
     renderer.h \
-    application.h
+    application.h\
+    h264decoder.h\
+    common.h

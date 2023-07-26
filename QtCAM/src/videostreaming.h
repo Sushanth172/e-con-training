@@ -438,6 +438,8 @@ private:
 
     QImage *m_capImage;
     QImage *irRenderer;
+    QImage *qImageRenderer;
+    QImage *cu83IRWindow;
 
 
     QString ctrlName, ctrlType, ctrlID, ctrlStepSize, ctrlMaxValue, ctrlMinValue,ctrlDefaultValue;
